@@ -119,7 +119,7 @@ def path_to_query(path):
                 if 'base_options' in tab and skip_base_options:
                     continue
                 if group in tab['test_group_name']:
-                    query = '%s#%s' % (dashboard_name, tab['name'][0])
+                    query = f"{dashboard_name}#{tab['name'][0]}"
                     options[dashboard_name] = (-len(tabs) + penalty, query)
             if dashboard_name in options:
                 break
@@ -127,6 +127,6 @@ def path_to_query(path):
         return options['k8s'][1]
     elif len(options) > 1:
         logging.info('ambiguous testgrid options: %s', options)
-    elif len(options) == 0:
+    elif not options:
         return ''
     return sorted(options.values())[0][1]

@@ -34,8 +34,9 @@ LINKIFY_RE = re.compile(
 def do_timestamp(unix_time, css_class='timestamp', tmpl='%F %H:%M'):
     """Convert an int Unix timestamp into a human-readable datetime."""
     t = datetime.datetime.utcfromtimestamp(unix_time)
-    return jinja2.Markup('<span class="%s" data-epoch="%s">%s</span>' %
-                         (css_class, unix_time, t.strftime(tmpl)))
+    return jinja2.Markup(
+        f'<span class="{css_class}" data-epoch="{unix_time}">{t.strftime(tmpl)}</span>'
+    )
 
 
 def do_dt_to_epoch(dt):
@@ -44,8 +45,9 @@ def do_dt_to_epoch(dt):
 
 def do_shorttimestamp(unix_time):
     t = datetime.datetime.utcfromtimestamp(unix_time)
-    return jinja2.Markup('<span class="shorttimestamp" data-epoch="%s">%s</span>' %
-                         (unix_time, t.strftime('%m-%d %H:%M')))
+    return jinja2.Markup(
+        f"""<span class="shorttimestamp" data-epoch="{unix_time}">{t.strftime('%m-%d %H:%M')}</span>"""
+    )
 
 
 def do_duration(seconds):
@@ -56,10 +58,7 @@ def do_duration(seconds):
         return '%dh%dm' % (hours, minutes)
     if minutes:
         return '%dm%ds' % (minutes, seconds)
-    else:
-        if seconds < 10:
-            return '%.2fs' % seconds
-        return '%ds' % seconds
+    return '%.2fs' % seconds if seconds < 10 else '%ds' % seconds
 
 
 def do_slugify(inp):
@@ -75,23 +74,21 @@ def do_linkify_stacktrace(inp, commit, repo):
         return jinja2.Markup(inp)  # this was already escaped, mark it safe!
     def rep(m):
         prefix, full, path, line = m.groups()
-        return '%s<a href="%s">%s</a>' % (
-            prefix,
-            GITHUB_VIEW_TEMPLATE % (repo, commit, path, line),
-            full)
+        return f'{prefix}<a href="{GITHUB_VIEW_TEMPLATE % (repo, commit, path, line)}">{full}</a>'
+
     return jinja2.Markup(LINKIFY_RE.sub(rep, inp))
 
 
 def do_github_commit_link(commit, repo):
     commit_url = jinja2.escape(GITHUB_COMMIT_TEMPLATE % (repo, commit))
-    return jinja2.Markup('<a href="%s">%s</a>' % (commit_url, commit[:8]))
+    return jinja2.Markup(f'<a href="{commit_url}">{commit[:8]}</a>')
 
 
 def do_maybe_linkify(inp):
     try:
         if urlparse.urlparse(inp).scheme in ('http', 'https'):
             inp = unicode(jinja2.escape(inp))
-            return jinja2.Markup('<a href="%s">%s</a>' % (inp, inp))
+            return jinja2.Markup(f'<a href="{inp}">{inp}</a>')
     except (AttributeError, TypeError):
         pass
     return inp
@@ -104,26 +101,25 @@ def do_testcmd(name):
         except ValueError:  # don't block the page render
             logging.error('Unexpected Go unit test name %r', name)
             return name
-        return 'go test -v %s -run %s$' % (pkg, name)
+        return f'go test -v {pkg} -run {name}$'
     elif name.startswith('istio.io/'):
         return ''
     elif name.startswith('//'):
-        return 'bazel test %s' % name
+        return f'bazel test {name}'
     elif name.startswith('verify '):
-        return 'make verify WHAT=%s' % name.split(' ')[1]
+        return f"make verify WHAT={name.split(' ')[1]}"
     else:
         name = re.sub(r'^\[k8s\.io\] ', '', name)
         name_escaped = re.escape(name).replace('\\ ', '\\s')
 
-        test_args = ('--ginkgo.focus=%s$' % name_escaped)
-        return "go run hack/e2e.go -v --test --test_args='%s'" % test_args
+        test_args = f'--ginkgo.focus={name_escaped}$'
+        return f"go run hack/e2e.go -v --test --test_args='{test_args}'"
 
 
 def do_parse_pod_name(text):
     """Find the pod name from the failure and return the pod name."""
-    p = re.search(r' pod (\S+)', text)
-    if p:
-        return re.sub(r'[\'"\\:]', '', p.group(1))
+    if p := re.search(r' pod (\S+)', text):
+        return re.sub(r'[\'"\\:]', '', p[1])
     else:
         return ""
 
@@ -134,10 +130,9 @@ def do_label_attr(labels, name):
     'XS'
     """
     name += '/'
-    for label in labels:
-        if label.startswith(name):
-            return label[len(name):]
-    return ''
+    return next(
+        (label[len(name) :] for label in labels if label.startswith(name)), ''
+    )
 
 def do_classify_size(payload):
     """
@@ -147,17 +142,20 @@ def do_classify_size(payload):
     size = do_label_attr(payload['labels'], 'size')
     if not size and 'additions' in payload and 'deletions' in payload:
         lines = payload['additions'] + payload['deletions']
-        # based on mungegithub/mungers/size.go
-        for limit, label in [
-            (10, 'XS'),
-            (30, 'S'),
-            (100, 'M'),
-            (500, 'L'),
-            (1000, 'XL')
-        ]:
-            if lines < limit:
-                return label
-        return 'XXL'
+        return next(
+            (
+                label
+                for limit, label in [
+                    (10, 'XS'),
+                    (30, 'S'),
+                    (100, 'M'),
+                    (500, 'L'),
+                    (1000, 'XL'),
+                ]
+                if lines < limit
+            ),
+            'XXL',
+        )
     return size
 
 
@@ -180,8 +178,8 @@ def do_render_status(payload, user):
             text = text[:text.index('#')]
 
     for ctx, (state, _url, desc) in payload.get('status', {}).items():
-        if ctx == 'Submit Queue' and state == 'pending':
-            if 'does not have lgtm' in desc.lower():
+        if 'does not have lgtm' in desc.lower():
+            if ctx == 'Submit Queue' and state == 'pending':
                 # Don't show overall status as pending when Submit
                 # won't continue without LGTM.
                 continue
@@ -209,9 +207,8 @@ def do_render_status(payload, user):
         state = 'success'
         title = 'tests passing'
     if icon:
-        icon = '<span class="text-%s octicon octicon-%s" title="%s"></span>' % (
-            state, icon, title)
-    return jinja2.Markup('%s%s' % (icon, text))
+        icon = f'<span class="text-{state} octicon octicon-{icon}" title="{title}"></span>'
+    return jinja2.Markup(f'{icon}{text}')
 
 
 def do_get_latest(payload, user):
@@ -225,9 +222,7 @@ def do_get_latest(payload, user):
 
 
 def do_ltrim(s, needle):
-    if s.startswith(needle):
-        return s[len(needle):]
-    return s
+    return s[len(needle):] if s.startswith(needle) else s
 
 
 def do_select(seq, pred):
@@ -236,25 +231,25 @@ def do_select(seq, pred):
 
 def do_tg_url(testgrid_query, test_name=''):
     if test_name:
-        regex = '^Overall$|' + re.escape(test_name)
-        testgrid_query += '&include-filter-by-regex=%s' % urllib.quote(regex)
-    return 'https://testgrid.k8s.io/%s' % testgrid_query
+        regex = f'^Overall$|{re.escape(test_name)}'
+        testgrid_query += f'&include-filter-by-regex={urllib.quote(regex)}'
+    return f'https://testgrid.k8s.io/{testgrid_query}'
 
 
 def do_gcs_browse_url(gcs_path):
     if not gcs_path.endswith('/'):
         gcs_path += '/'
-    return 'https://gcsweb.k8s.io/gcs' + gcs_path
+    return f'https://gcsweb.k8s.io/gcs{gcs_path}'
 
 
 static_hashes = {}
 
 def do_static(filename):
-    filename = 'static/%s' % filename
+    filename = f'static/{filename}'
     if filename not in static_hashes:
         data = open(filename).read()
         static_hashes[filename] = hashlib.sha1(data).hexdigest()[:10]
-    return '/%s?%s' % (filename, static_hashes[filename])
+    return f'/{filename}?{static_hashes[filename]}'
 
 
 do_basename = os.path.basename

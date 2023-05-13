@@ -77,7 +77,7 @@ class GCSClient:
     @staticmethod
     def _parse_uri(path):
         if not path.startswith('gs://'):
-            raise ValueError("Bad path: %s, should start with 'gs://'" % path)
+            raise ValueError(f"Bad path: {path}, should start with 'gs://'")
         bucket, prefix = path[5:].split('/', 1)
         return bucket, prefix
 
@@ -137,7 +137,7 @@ class GCSClient:
         """Generates all tests for a build."""
         files = {}
         assert not build_dir.endswith('/')
-        for junit_path in self._ls_junit_paths(build_dir + '/'):
+        for junit_path in self._ls_junit_paths(f'{build_dir}/'):
             junit = self.get(junit_path)
             if junit is None:
                 continue
@@ -176,7 +176,9 @@ class GCSClient:
     def get_builds(self, builds_have, build_limit=sys.maxsize):
         """Generates all (job, build) pairs ever."""
         if self.metadata.get('pr'):
-            files = self.ls(self.jobs_dir + '/directory/', delim=False, build_limit=build_limit)
+            files = self.ls(
+                f'{self.jobs_dir}/directory/', delim=False, build_limit=build_limit
+            )
             for fname in files:
                 if fname.endswith('.txt') and 'latest-build' not in fname:
                     job, build = fname[:-4].split('/')[-2:]

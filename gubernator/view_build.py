@@ -39,10 +39,7 @@ class JUnitParser(object):
             if subelement.tag == 'testsuite':
                 self.handle_suite(subelement, filename)
             elif subelement.tag == 'testcase':
-                if 'name' in tree.attrib:
-                    name_prefix = tree.attrib['name'] + ' '
-                else:
-                    name_prefix = ''
+                name_prefix = tree.attrib['name'] + ' ' if 'name' in tree.attrib else ''
                 self.handle_test(subelement, filename, name_prefix)
 
     def handle_test(self, child, filename, name_prefix=''):
@@ -50,13 +47,13 @@ class JUnitParser(object):
         if child.find('skipped') is not None:
             self.skipped.append(name)
         elif child.find('failure') is not None:
-            time = 0.0
-            if 'time' in child.attrib:
-                time = float(child.attrib['time'])
-            out = []
-            for param in child.findall('system-out') + child.findall('system-err'):
-                if param.text:
-                    out.append(param.text)
+            time = float(child.attrib['time']) if 'time' in child.attrib else 0.0
+            out = [
+                param.text
+                for param in child.findall('system-out')
+                + child.findall('system-err')
+                if param.text
+            ]
             for param in child.findall('failure'):
                 self.failed.append((name, time, param.text, filename, '\n'.join(out)))
         else:
@@ -97,14 +94,13 @@ class JUnitParser(object):
 
 @view_base.memcache_memoize('build-log-parsed://', expires=60*60*4)
 def get_build_log(build_dir):
-    build_log = gcs_async.read(build_dir + '/build-log.txt').get_result()
-    if build_log:
+    if build_log := gcs_async.read(f'{build_dir}/build-log.txt').get_result():
         return log_parser.digest(build_log)
 
 
 def get_running_build_log(job, build, prow_url):
     try:
-        url = "https://%s/log?job=%s&id=%s" % (prow_url, job, build)
+        url = f"https://{prow_url}/log?job={job}&id={build}"
         result = urlfetch.fetch(url)
         if result.status_code == 200:
             return log_parser.digest(result.content), url
@@ -128,7 +124,7 @@ def normalize_metadata(started_future, finished_future):
         started = 'null'
     elif started and not finished:
         finished = 'null'
-    elif not (started and finished):
+    elif not started:
         return None, None
     started = json.loads(started)
     finished = json.loads(finished)
@@ -163,17 +159,17 @@ def build_details(build_dir, recursive=False):
                   passed: [name...]}
     """
     started, finished = normalize_metadata(
-        gcs_async.read(build_dir + '/started.json'),
-        gcs_async.read(build_dir + '/finished.json')
+        gcs_async.read(f'{build_dir}/started.json'),
+        gcs_async.read(f'{build_dir}/finished.json'),
     )
 
     if started is None and finished is None:
         return started, finished, None
 
     if recursive:
-        artifact_paths = view_base.gcs_ls_recursive('%s/artifacts' % build_dir)
+        artifact_paths = view_base.gcs_ls_recursive(f'{build_dir}/artifacts')
     else:
-        artifact_paths = view_base.gcs_ls('%s/artifacts' % build_dir)
+        artifact_paths = view_base.gcs_ls(f'{build_dir}/artifacts')
 
     junit_paths = [f.filename for f in artifact_paths if f.filename.endswith('.xml')]
 
@@ -208,10 +204,10 @@ def parse_pr_path(gcs_path, default_org, default_repo):
     parsed_repo = os.path.basename(os.path.dirname(gcs_path))
     if parsed_repo == 'pull':
         pr_path = ''
-        repo = '%s/%s' % (default_org, default_repo)
+        repo = f'{default_org}/{default_repo}'
     elif '_' not in parsed_repo:
-        pr_path = parsed_repo + '/'
-        repo = '%s/%s' % (default_org, parsed_repo)
+        pr_path = f'{parsed_repo}/'
+        repo = f'{default_org}/{parsed_repo}'
     else:
         pr_path = parsed_repo.replace('_', '/', 1) + '/'
         repo = parsed_repo.replace('_', '/', 1)
@@ -224,12 +220,12 @@ class BuildHandler(view_base.BaseHandler):
         # pylint: disable=too-many-locals
         if prefix.endswith('/directory'):
             # redirect directory requests
-            link = gcs_async.read('/%s/%s/%s.txt' % (prefix, job, build)).get_result()
+            link = gcs_async.read(f'/{prefix}/{job}/{build}.txt').get_result()
             if link and link.startswith('gs://'):
                 self.redirect('/build/' + link.replace('gs://', ''))
                 return
 
-        job_dir = '/%s/%s/' % (prefix, job)
+        job_dir = f'/{prefix}/{job}/'
         testgrid_query = testgrid.path_to_query(job_dir)
         build_dir = job_dir + build
         issues_fut = models.GHIssueDigest.find_xrefs_async(build_dir)
@@ -247,13 +243,12 @@ class BuildHandler(view_base.BaseHandler):
         build_log = ''
         build_log_src = None
         if 'log' in self.request.params or (not finished) or \
-            (finished and finished.get('result') != 'SUCCESS' and len(results['failed']) <= 1):
+                (finished and finished.get('result') != 'SUCCESS' and len(results['failed']) <= 1):
             want_build_log = True
             build_log = get_build_log(build_dir)
 
         pr, pr_path, pr_digest = None, None, None
-        repo = '%s/%s' % (self.app.config['default_org'],
-                          self.app.config['default_repo'])
+        repo = f"{self.app.config['default_org']}/{self.app.config['default_repo']}"
         spyglass_link = ''
         external_config = get_build_config(prefix, self.app.config)
         if external_config is not None:
@@ -353,8 +348,7 @@ def build_list(job_dir, before):
     if indirect:
         # follow the indirect links
         build_symlinks = [
-            (build,
-             gcs_async.read('%s%s.txt' % (job_dir, build)))
+            (build, gcs_async.read(f'{job_dir}{build}.txt'))
             for build in builds
         ]
         build_futures = []
@@ -363,14 +357,21 @@ def build_list(job_dir, before):
             if redir and redir.startswith('gs://'):
                 redir = redir[4:].strip()
                 build_futures.append(
-                    (build, redir,
-                     gcs_async.read('%s/started.json' % redir),
-                     gcs_async.read('%s/finished.json' % redir)))
+                    (
+                        build,
+                        redir,
+                        gcs_async.read(f'{redir}/started.json'),
+                        gcs_async.read(f'{redir}/finished.json'),
+                    )
+                )
     else:
         build_futures = [
-            (build, '%s%s' % (job_dir, build),
-             gcs_async.read('%s%s/started.json' % (job_dir, build)),
-             gcs_async.read('%s%s/finished.json' % (job_dir, build)))
+            (
+                build,
+                f'{job_dir}{build}',
+                gcs_async.read(f'{job_dir}{build}/started.json'),
+                gcs_async.read(f'{job_dir}{build}/finished.json'),
+            )
             for build in builds
         ]
 
@@ -388,11 +389,11 @@ def build_list(job_dir, before):
 class BuildListHandler(view_base.BaseHandler):
     """Show a list of Builds for a Job."""
     def get(self, prefix, job):
-        job_dir = '/%s/%s/' % (prefix, job)
+        job_dir = f'/{prefix}/{job}/'
         testgrid_query = testgrid.path_to_query(job_dir)
         before = self.request.get('before')
         builds, refs = build_list(job_dir, before)
-        dir_link = re.sub(r'/pull/.*', '/directory/%s' % job, prefix)
+        dir_link = re.sub(r'/pull/.*', f'/directory/{job}', prefix)
 
         self.render('build_list.html',
                     dict(job=job, job_dir=job_dir, dir_link=dir_link,
@@ -404,7 +405,7 @@ class BuildListHandler(view_base.BaseHandler):
 class JobListHandler(view_base.BaseHandler):
     """Show a list of Jobs in a directory."""
     def get(self, prefix):
-        jobs_dir = '/%s' % prefix
+        jobs_dir = f'/{prefix}'
         fstats = view_base.gcs_ls(jobs_dir)
         fstats.sort()
         self.render('job_list.html', dict(jobs_dir=jobs_dir, fstats=fstats))

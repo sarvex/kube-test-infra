@@ -184,9 +184,7 @@ def assert_group_keys(group):
     allowedKeys = ["name", "gcs_prefix", "alert_stale_results_hours",
                    "num_failures_to_alert", "num_columns_recent"]
 
-    if [k for k in group.keys() if k not in allowedKeys]:
-        return False
-    return True
+    return not [k for k in group.keys() if k not in allowedKeys]
 
 
 def find_prow_job(name, path):
@@ -201,10 +199,10 @@ def find_prow_job(name, path):
     for (dirpath, _, filenames) in walk(path):
         for filename in filenames:
             if filename.endswith(".yaml") and filename not in EXEMPT_FILES:
-                for _, line in enumerate(open(dirpath + "/" + filename)):
+                for _, line in enumerate(open(f"{dirpath}/{filename}")):
                     for _ in re.finditer(pattern, line):
                         #print "Found %s in %s" % (name, filename)
-                        return dirpath + "/" + filename
+                        return f"{dirpath}/{filename}"
     return ""
 
 
@@ -217,7 +215,7 @@ def patch_prow_job_with_tab(prow_yaml, dash_tab, dashboard_name):
     if "annotations" in prow_yaml:
         # There exists an annotation; amend it
         annotation = prow_yaml["annotations"]
-        if "testgrid-dashboards" in prow_yaml["annotations"]:
+        if "testgrid-dashboards" in annotation:
             # Existing annotation includes a testgrid annotation
             # The dashboard name must come first if it's a sig-release-master-* dashboard
             if dashboard_name.startswith("sig-release-master"):
@@ -225,7 +223,7 @@ def patch_prow_job_with_tab(prow_yaml, dash_tab, dashboard_name):
                                                      + ", "
                                                      + annotation["testgrid-dashboards"])
             else:
-                annotation["testgrid-dashboards"] += (", " + dashboard_name)
+                annotation["testgrid-dashboards"] += f", {dashboard_name}"
         else:
             #Existing annotation is non-testgrid-related
             annotation["testgrid-dashboards"] = dashboard_name
@@ -266,12 +264,7 @@ def patch_prow_job_with_group(prow_yaml, test_group, force_group_creation=False)
     Will amend existing annotations or create one if there is data to migrate
     If there is no migratable data, an annotation will be forced only if specified
     """
-    if "annotations" in prow_yaml:
-        # There exists an annotation; amend it
-        annotation = prow_yaml["annotations"]
-    else:
-        annotation = {}
-
+    annotation = prow_yaml["annotations"] if "annotations" in prow_yaml else {}
     # migrate info
     opt_arguments = [("num_failures_to_alert", "testgrid-num-failures-to-alert"),
                      ("alert_stale_results_hours", "testgrid-alert-stale-results-hours"),

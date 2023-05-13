@@ -39,7 +39,7 @@ class TestBigquery(unittest.TestCase):
             if name in ['BUILD', 'BUILD.bazel', 'README.md']:
                 continue
             if not path.endswith('.yaml'):
-                self.fail('Only .yaml files allowed: %s' % path)
+                self.fail(f'Only .yaml files allowed: {path}')
 
             with open(path) as config_file:
                 try:
@@ -69,17 +69,13 @@ class TestBigquery(unittest.TestCase):
             r'\(http://storage\.googleapis\.com/k8s-metrics/([\w-]+)-latest\.json\)',
             readme,
         ))
-        missing = config_metrics - readme_metrics
-        if missing:
+        if missing := config_metrics - readme_metrics:
             self.fail(
-                'test-infra/metrics/README.md is missing entries for metrics: %s.'
-                % ', '.join(sorted(missing)),
+                f"test-infra/metrics/README.md is missing entries for metrics: {', '.join(sorted(missing))}."
             )
-        extra = readme_metrics - config_metrics
-        if extra:
+        if extra := readme_metrics - config_metrics:
             self.fail(
-                'test-infra/metrics/README.md includes metrics that are missing config files: %s.'
-                % ', '.join(sorted(extra)),
+                f"test-infra/metrics/README.md includes metrics that are missing config files: {', '.join(sorted(extra))}."
             )
 
         # Check that all configs are linked in readme.

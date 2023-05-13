@@ -183,7 +183,7 @@ def pull_ref(pull):
             name, sha = ref, 'FETCH_HEAD'
         else:
             name = ref
-            sha = 'refs/pr/%s' % ref
+            sha = f'refs/pr/{ref}'
 
         checkouts.append(sha)
         if not refs:  # First ref should be branch to merge into
@@ -207,17 +207,17 @@ def branch_ref(branch):
 def repository(repo, ssh):
     """Return the url associated with the repo."""
     if repo.startswith('k8s.io/'):
-        repo = 'github.com/kubernetes/%s' % (repo[len('k8s.io/'):])
+        repo = f"github.com/kubernetes/{repo[len('k8s.io/'):]}"
     elif repo.startswith('sigs.k8s.io/'):
-        repo = 'github.com/kubernetes-sigs/%s' % (repo[len('sigs.k8s.io/'):])
+        repo = f"github.com/kubernetes-sigs/{repo[len('sigs.k8s.io/'):]}"
     elif repo.startswith('istio.io/'):
-        repo = 'github.com/istio/%s' % (repo[len('istio.io/'):])
+        repo = f"github.com/istio/{repo[len('istio.io/'):]}"
     if ssh:
         if ":" not in repo:
             parts = repo.split('/', 1)
-            repo = '%s:%s' % (parts[0], parts[1])
-        return 'git@%s' % repo
-    return 'https://%s' % repo
+            repo = f'{parts[0]}:{parts[1]}'
+        return f'git@{repo}'
+    return f'https://{repo}'
 
 
 def random_sleep(attempt):
@@ -249,11 +249,7 @@ def checkout(call, repo, repo_path, branch, pull, ssh='', git_cache='', clean=Fa
     if bool(branch) == bool(pull):
         raise ValueError('Must specify one of --branch or --pull')
 
-    if pull:
-        refs, checkouts = pull_ref(pull)
-    else:
-        refs, checkouts = branch_ref(branch)
-
+    refs, checkouts = pull_ref(pull) if pull else branch_ref(branch)
     git = 'git'
 
     # auth to google gerrit instance
@@ -263,13 +259,11 @@ def checkout(call, repo, repo_path, branch, pull, ssh='', git_cache='', clean=Fa
         auth_google_gerrit(git, call)
 
     if git_cache:
-        cache_dir = '%s/%s' % (git_cache, repo)
-        try:
+        cache_dir = f'{git_cache}/{repo}'
+        with contextlib.suppress(OSError):
             os.makedirs(cache_dir)
-        except OSError:
-            pass
-        call([git, 'init', repo_path, '--separate-git-dir=%s' % cache_dir])
-        call(['rm', '-f', '%s/index.lock' % cache_dir])
+        call([git, 'init', repo_path, f'--separate-git-dir={cache_dir}'])
+        call(['rm', '-f', f'{cache_dir}/index.lock'])
     else:
         call([git, 'init', repo_path])
     os.chdir(repo_path)
@@ -305,8 +299,10 @@ def checkout(call, repo, repo_path, branch, pull, ssh='', git_cache='', clean=Fa
         merge_date += 1
         git_merge_env[GIT_AUTHOR_DATE_ENV] = str(merge_date)
         git_merge_env[GIT_COMMITTER_DATE_ENV] = str(merge_date)
-        call(['git', 'merge', '--no-ff', '-m', 'Merge %s' % ref, head],
-             env=git_merge_env)
+        call(
+            ['git', 'merge', '--no-ff', '-m', f'Merge {ref}', head],
+            env=git_merge_env,
+        )
 
 
 def repos_dict(repos):
@@ -337,7 +333,7 @@ def start(gsutil, paths, stamp, node_name, version, repos):
         gsutil.upload_text(
             paths.pr_build_link,
             paths.pr_path,
-            additional_headers=['-h', 'x-goog-meta-link: %s' % paths.pr_path]
+            additional_headers=['-h', f'x-goog-meta-link: {paths.pr_path}'],
         )
 
 
@@ -361,7 +357,7 @@ class GSUtil(object):
     def upload_json(self, path, jdict, generation=None):
         """Upload the dictionary object to path."""
         if generation is not None:  # generation==0 means object does not exist
-            gen = ['-h', 'x-goog-if-generation-match:%s' % generation]
+            gen = ['-h', f'x-goog-if-generation-match:{generation}']
         else:
             gen = []
         with tempfile.NamedTemporaryFile(mode='wt', encoding='utf-8', prefix='gsutil_') as fp:
@@ -394,7 +390,7 @@ class GSUtil(object):
 
     def cat(self, path, generation):
         """Return contents of path#generation"""
-        cmd = [self.gsutil, '-q', 'cat', '%s#%s' % (path, generation)]
+        cmd = [self.gsutil, '-q', 'cat', f'{path}#{generation}']
         return self.call(cmd, output=True)
 
     def upload_artifacts(self, gsutil, path, artifacts):
@@ -415,7 +411,7 @@ class GSUtil(object):
                 localpath = artifacts.replace(local_base, remote_base)
                 os.rename(artifacts, localpath)
                 artifacts = localpath
-            path = path[:-len(remote_base + '/')]
+            path = path[:-len(f'{remote_base}/')]
         except subprocess.CalledProcessError:
             logging.warning('Remote dir %s not exist yet', path)
         cmd = [
@@ -443,7 +439,7 @@ def append_result(gsutil, path, build, version, passed):
             random_sleep(min(errors, 3))
         try:
             out = gsutil.stat(path)
-            gen = re.search(r'Generation:\s+(\d+)', out).group(1)
+            gen = re.search(r'Generation:\s+(\d+)', out)[1]
         except subprocess.CalledProcessError:
             gen = 0
         if gen:
@@ -500,21 +496,14 @@ def metadata(repos, artifacts, call):
         # HARDEN against metadata only being read from finished.
         meta['pod'] = os.environ[POD_ENV]
 
-    try:
-        commit = call(['git', 'rev-parse', 'HEAD'], output=True)
-        if commit:
+    with contextlib.suppress(subprocess.CalledProcessError):
+        if commit := call(['git', 'rev-parse', 'HEAD'], output=True):
             meta['repo-commit'] = commit.strip()
-    except subprocess.CalledProcessError:
-        pass
-
     cwd = os.getcwd()
     os.chdir(test_infra('.'))
-    try:
-        commit = call(['git', 'rev-parse', 'HEAD'], output=True)
-        if commit:
+    with contextlib.suppress(subprocess.CalledProcessError):
+        if commit := call(['git', 'rev-parse', 'HEAD'], output=True):
             meta['infra-commit'] = commit.strip()[:9]
-    except subprocess.CalledProcessError:
-        pass
     os.chdir(cwd)
 
     return meta
@@ -702,7 +691,7 @@ def pr_paths(base, repos, job, build):
         pr_path=pr_path,
         finished=os.path.join(pr_path, 'finished.json'),
         latest=os.path.join(base, 'directory', job, 'latest-build.txt'),
-        pr_build_link=os.path.join(base, 'directory', job, '%s.txt' % build),
+        pr_build_link=os.path.join(base, 'directory', job, f'{build}.txt'),
         pr_latest=os.path.join(base, 'pull', pull, job, 'latest-build.txt'),
         pr_result_cache=pr_result_cache,
         result_cache=result_cache,
@@ -739,7 +728,7 @@ def build_name(started):
     if BUILD_ENV not in os.environ:
         # Automatically generate a build number if none is set
         uniq = '%x-%d' % (hash(node()), os.getpid())
-        autogen = time.strftime('%Y%m%d-%H%M%S-' + uniq, time.gmtime(started))
+        autogen = time.strftime(f'%Y%m%d-%H%M%S-{uniq}', time.gmtime(started))
         os.environ[BUILD_ENV] = autogen
     return os.environ[BUILD_ENV]
 
@@ -766,16 +755,16 @@ def setup_credentials(call, robot, upload):
         )
     # this sometimes fails spuriously due to DNS flakiness, so we retry it
     for _ in range(5):
-        try:
-            call([
-                'gcloud',
-                'auth',
-                'activate-service-account',
-                '--key-file=%s' % os.environ[SERVICE_ACCOUNT_ENV],
-            ])
+        with contextlib.suppress(subprocess.CalledProcessError):
+            call(
+                [
+                    'gcloud',
+                    'auth',
+                    'activate-service-account',
+                    f'--key-file={os.environ[SERVICE_ACCOUNT_ENV]}',
+                ]
+            )
             break
-        except subprocess.CalledProcessError:
-            pass
         sleep_for = 1
         logging.info(
             'Retrying service account activation in %.2fs ...', sleep_for)
@@ -866,7 +855,7 @@ def setup_magic_environment(job, call):
     os.environ[BOOTSTRAP_ENV] = 'yes'
     # This helps prevent reuse of cloudsdk configuration. It also reduces the
     # risk that running a job on a workstation corrupts the user's config.
-    os.environ[CLOUDSDK_ENV] = '%s/.config/gcloud' % cwd
+    os.environ[CLOUDSDK_ENV] = f'{cwd}/.config/gcloud'
 
     # Set $ARTIFACTS to help migrate to podutils
     os.environ[JOB_ARTIFACTS_ENV] = os.path.join(
@@ -880,11 +869,7 @@ def setup_magic_environment(job, call):
             logging.info(
                 'cannot create %s, continue : %s', get_artifacts_dir(), exc)
 
-    # Try to set SOURCE_DATE_EPOCH based on the commit date of the tip of the
-    # tree.
-    # This improves cacheability of stamped binaries.
-    head_commit_date = commit_date('git', 'HEAD', call)
-    if head_commit_date:
+    if head_commit_date := commit_date('git', 'HEAD', call):
         os.environ[SOURCE_DATE_EPOCH_ENV] = head_commit_date.strip()
 
 
@@ -907,16 +892,14 @@ def job_script(job, scenario, extra_job_args):
         config_json_args = job_config.get('args', [])
     elif not scenario:
         raise ValueError('cannot find scenario for job', job)
-    cmd = test_infra('scenarios/%s.py' % scenario)
+    cmd = test_infra(f'scenarios/{scenario}.py')
     return [cmd] + job_args(config_json_args + extra_job_args)
 
 
 def gubernator_uri(paths):
     """Return a gubernator link for this build."""
     job = os.path.dirname(paths.build_log)
-    if job.startswith('gs:/'):
-        return job.replace('gs:/', GUBERNATOR, 1)
-    return job
+    return job.replace('gs:/', GUBERNATOR, 1) if job.startswith('gs:/') else job
 
 
 @contextlib.contextmanager
@@ -1013,7 +996,7 @@ def parse_repos(args):
         if args.branch:
             raise ValueError(
                 'Multi --repo does not support --branch, use --repo=R=branch')
-    elif len(repos) == 1 and (args.branch or args.pull):
+    elif args.branch or args.pull:
         repo = repos[0]
         if '=' in repo or ':' in repo:
             raise ValueError(
@@ -1025,11 +1008,11 @@ def parse_repos(args):
             r'([^=]+)(=([^:,~^\s]+(:[0-9a-fA-F]+)?(:refs/changes/[0-9/]+)?(,|$))+)?$', repo)
         if not mat:
             raise ValueError('bad repo', repo, repos)
-        this_repo = mat.group(1)
-        if not mat.group(2):
+        this_repo = mat[1]
+        if not mat[2]:
             ret[this_repo] = ('master', '')
             continue
-        commits = mat.group(2)[1:].split(',')
+        commits = mat[2][1:].split(',')
         if len(commits) == 1:
             # Checking out a branch, possibly at a specific commit
             ret[this_repo] = (commits[0], '')
@@ -1049,10 +1032,7 @@ def bootstrap(args):
     build_log_path = os.path.abspath('build-log.txt')
     build_log = setup_logging(build_log_path)
     started = time.time()
-    if args.timeout:
-        end = started + args.timeout * 60
-    else:
-        end = 0
+    end = started + args.timeout * 60 if args.timeout else 0
     call = lambda *a, **kw: _call(end, *a, **kw)
     gsutil = GSUtil(call)
 
@@ -1075,10 +1055,7 @@ def bootstrap(args):
     build = build_name(started)
 
     if upload:
-        # TODO(cjwager, stevekuznetsov): support the workspace
-        # repo not matching the upload repo in the shiny new init container
-        pull_ref_repos = [repo for repo in repos if repos[repo][1]]
-        if pull_ref_repos:
+        if pull_ref_repos := [repo for repo in repos if repos[repo][1]]:
             workspace_main, repos.main = repos.main, pull_ref_repos[0]
             paths = pr_paths(upload, repos, job, build)
             repos.main = workspace_main

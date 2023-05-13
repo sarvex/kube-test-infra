@@ -66,7 +66,7 @@ def process_changes(results, buckets):
             ack_ids.append(rec_message.ack_id)
             continue
         job, build = object_id[:-len('/finished.json')].rsplit('/', 1)
-        job = 'gs://%s/%s' % (bucket_id, job)
+        job = f'gs://{bucket_id}/{job}'
         todo.append((rec_message.ack_id, job, build))
     return ack_ids, todo
 
@@ -110,7 +110,7 @@ def retry(func, *args, **kwargs):
             time.sleep(1.4 ** attempt)
         except api_exceptions.BadRequest as err:
             args_size = sys.getsizeof(args)
-            kwargs_str = ','.join('{}={}'.format(k, v) for k, v in kwargs.items())
+            kwargs_str = ','.join(f'{k}={v}' for k, v in kwargs.items())
             print(f"Error running {func.__name__} \
                    ([bytes in args]{args_size} with {kwargs_str}) : {str(err).encode('utf8')}")
             return None # Skip
@@ -183,14 +183,17 @@ def main(
         results = list(results.received_messages)
         start = time.time()
         while time.time() < start + 7:
-            results_more = list(subscriber.pull(
-                subscription=subscription_path,
-                max_messages=1000,
-                return_immediately=True).received_messages)
-            if not results_more:
-                break
-            results.extend(results_more)
+            if results_more := list(
+                subscriber.pull(
+                    subscription=subscription_path,
+                    max_messages=1000,
+                    return_immediately=True,
+                ).received_messages
+            ):
+                results.extend(results_more)
 
+            else:
+                break
         print('PULLED', len(results))
 
         ack_ids, todo = process_changes(results, buckets)
@@ -304,7 +307,7 @@ class StopWhen:
 
 def _make_bucket_map(path):
     bucket_map = yaml.safe_load(open(path))
-    bucket_to_attrs = dict()
+    bucket_to_attrs = {}
     for k, v in bucket_map.items():
         bucket = k.rsplit('/')[2] # of form gs://<bucket>/...
         bucket_to_attrs[bucket] = v

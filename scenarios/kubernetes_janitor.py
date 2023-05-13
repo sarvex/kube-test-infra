@@ -49,11 +49,7 @@ def parse_project(path):
     """Parse target env file and return GCP project name."""
     with open(path, 'r') as fp:
         env = fp.read()
-    match = re.search(r'PROJECT=([^\n"]+)', env)
-    if match:
-        project = match.group(1)
-        return project
-    return None
+    return match[1] if (match := re.search(r'PROJECT=([^\n"]+)', env)) else None
 
 
 def clean_project(project, hours=24, dryrun=False, ratelimit=None, filt=None, python='python3'):
@@ -63,7 +59,11 @@ def clean_project(project, hours=24, dryrun=False, ratelimit=None, filt=None, py
         return
     CHECKED.add(project)
 
-    cmd = [python, test_infra('boskos/cmd/janitor/gcp_janitor.py'), '--project=%s' % project]
+    cmd = [
+        python,
+        test_infra('boskos/cmd/janitor/gcp_janitor.py'),
+        f'--project={project}',
+    ]
     cmd.append('--hour=%d' % hours)
     if dryrun:
         cmd.append('--dryrun')
@@ -72,7 +72,7 @@ def clean_project(project, hours=24, dryrun=False, ratelimit=None, filt=None, py
     if VERBOSE:
         cmd.append('--verbose')
     if filt:
-        cmd.append('--filter=%s' % filt)
+        cmd.append(f'--filter={filt}')
 
     try:
         check(*cmd)
@@ -121,7 +121,7 @@ def check_ci_jobs():
             mat = match_re.match(arg)
             if not mat:
                 continue
-            project = mat.group(1)
+            project = mat[1]
             if any(b in project for b in EXEMPT_PROJECTS):
                 print('Project %r is exempted in ci-janitor' % project, file=sys.stderr)
                 continue

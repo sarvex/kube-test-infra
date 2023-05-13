@@ -247,9 +247,7 @@ class RetryParams(object):
     self.max_retry_period = self._check('max_retry_period', max_retry_period)
     self.max_retries = self._check('max_retries', max_retries, True, int)
     self.min_retries = self._check('min_retries', min_retries, True, int)
-    if self.min_retries > self.max_retries:
-      self.min_retries = self.max_retries
-
+    self.min_retries = min(self.min_retries, self.max_retries)
     self.urlfetch_timeout = None
     if urlfetch_timeout is not None:
       self.urlfetch_timeout = self._check('urlfetch_timeout', urlfetch_timeout)
@@ -289,14 +287,11 @@ class RetryParams(object):
       valid_types.append(int)
 
     if type(val) not in valid_types:
-      raise TypeError(
-          'Expect type %s for parameter %s' % (val_type.__name__, name))
+      raise TypeError(f'Expect type {val_type.__name__} for parameter {name}')
     if val < 0:
-      raise ValueError(
-          'Value for parameter %s has to be greater than 0' % name)
+      raise ValueError(f'Value for parameter {name} has to be greater than 0')
     if not can_be_zero and val == 0:
-      raise ValueError(
-          'Value for parameter %s can not be 0' % name)
+      raise ValueError(f'Value for parameter {name} can not be 0')
     return val
 
   def belong_to_current_request(self):

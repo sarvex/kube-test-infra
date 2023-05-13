@@ -139,10 +139,10 @@ def get_skip_comments(events, skip_users=None):
     skip_users = skip_users or []
     skip_comments = set()
     for event, body, _timestamp in events:
-        action = body.get('action')
         if event in ('issue_comment', 'pull_request_review_comment'):
-            comment_id = body['comment']['id']
+            action = body.get('action')
             if action == 'deleted' or body['sender']['login'] in skip_users:
+                comment_id = body['comment']['id']
                 skip_comments.add(comment_id)
     return skip_comments
 
@@ -255,14 +255,11 @@ def get_comments(events, comments=None):
         comments: a list of dict(author=..., comment=..., timestamp=...),
                   ordered with the earliest comment first.
     """
-    if not comments:
-        comments = {}
-    else:
-        comments = {c['id']: c for c in comments}
+    comments = {} if not comments else {c['id']: c for c in comments}
     comments = {}  # comment_id : comment
     for event, body, _timestamp in events:
-        action = body.get('action')
         if event in ('issue_comment', 'pull_request_review_comment'):
+            action = body.get('action')
             comment_id = body['comment']['id']
             if action == 'deleted':
                 comments.pop(comment_id, None)
@@ -308,8 +305,7 @@ def get_approvers(comments):
     approvers = []
     for comment in comments:
         if comment['author'] == 'k8s-merge-robot':
-            m = APPROVERS_RE.search(comment['comment'])
-            if m:
+            if m := APPROVERS_RE.search(comment['comment']):
                 approvers = m.group(1).replace('"', '').split(',')
     return approvers
 
@@ -427,11 +423,11 @@ def calculate_attention(distilled_events, payload):
     for assignee in assignees:
         assignee_state, first, last = get_assignee_state(assignee, author, distilled_events)
         if assignee_state != 'waiting':
-            notify(assignee, '%s#%s#%s' % (assignee_state, first, last))
+            notify(assignee, f'{assignee_state}#{first}#{last}')
 
     author_state, first, last = get_author_state(author, distilled_events)
     if author_state != 'waiting':
-        notify(author, '%s#%s#%s' % (author_state, first, last))
+        notify(author, f'{author_state}#{first}#{last}')
 
     if payload.get('needs_rebase'):
         notify(author, 'needs rebase')

@@ -32,14 +32,12 @@ def download_content():
     """Downloads contributor data from github."""
     resp = requests.get('https://api.github.com/repos/kubernetes/kubernetes/stats/contributors')
     resp.raise_for_status()
-    data = resp.content
-    return data
+    return resp.content
 
 
 def load_content(data):
     """Parse the json response."""
-    users = [User(b) for b in json.loads(data)]
-    return users
+    return [User(b) for b in json.loads(data)]
 
 
 @functools.total_ordering

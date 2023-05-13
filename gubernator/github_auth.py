@@ -28,8 +28,8 @@ class Endpoint(view_base.BaseHandler):
     def github_client(self):
         client_key = 'github_client'
         if '.appspot.com' not in self.request.host and \
-            not self.request.host.startswith('localhost:'):
-            client_key = 'github_client_' + self.request.host
+                not self.request.host.startswith('localhost:'):
+            client_key = f'github_client_{self.request.host}'
         if not self.app.config.get(client_key):
             try:
                 self.app.config[client_key] = secrets.get(client_key)
@@ -68,9 +68,9 @@ class Endpoint(view_base.BaseHandler):
             state = security.generate_random_string(entropy=128)
             args = {
                 'client_id': client_id,
-                'redirect_uri': self.request.url + '/done',
-                'scope': '',  # Username only needs "public data" permission!
-                'state': state
+                'redirect_uri': f'{self.request.url}/done',
+                'scope': '',
+                'state': state,
             }
             self.session['gh_state'] = state
             self.redirect('https://github.com/login/oauth/authorize?'
@@ -123,6 +123,6 @@ class Endpoint(view_base.BaseHandler):
             # Note: we intentionally discard the access_token here,
             # since we don't need it for anything more.
             self.session['user'] = login
-            self.response.write('<h1>Welcome, %s</h1>' % login)
+            self.response.write(f'<h1>Welcome, {login}</h1>')
 
             self.maybe_redirect(target)

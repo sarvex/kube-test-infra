@@ -54,7 +54,7 @@ def migrate(migration, cursor=None, last_parent=None, stop=False):
 
     for entity in entities:
         changes = migration.handle_entity(entity)
-        counters.update(changes)
+        counters |= changes
 
     summary = ', '.join('%s: %d' % x for x in sorted(counters.items()))
     if entities:
@@ -91,7 +91,7 @@ class AdminDash(webapp2.RequestHandler):
         # https://www.owasp.org/index.php/Cross-Site_Request_Forgery_(CSRF)_Prevention_Cheat_Sheet
         #     #Checking_The_Referer_Header
         origin = self.request.headers.get('origin') + '/'
-        expected = self.request.host_url + '/'
+        expected = f'{self.request.host_url}/'
         if not (origin and origin == expected):
             logging.error('csrf check failed for %s, origin: %r', self.request.url, origin)
             self.abort(403)

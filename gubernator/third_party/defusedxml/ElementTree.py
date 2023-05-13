@@ -74,10 +74,7 @@ class DefusedXMLParser(_XMLParser):
         self.forbid_dtd = forbid_dtd
         self.forbid_entities = forbid_entities
         self.forbid_external = forbid_external
-        if PY3 and not PY31:
-            parser = self.parser
-        else:
-            parser = self._parser
+        parser = self.parser if PY3 and not PY31 else self._parser
         if self.forbid_dtd:
             parser.StartDoctypeDeclHandler = self.defused_start_doctype_decl
         if self.forbid_entities:

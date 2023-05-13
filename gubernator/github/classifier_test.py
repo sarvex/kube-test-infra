@@ -210,8 +210,10 @@ class CalculateTest(unittest.TestCase):
         def expect(body, comments, result):
             self.assertEqual(result, classifier.get_xrefs(
                 [{'comment': c} for c in comments], {'body': body}))
+
         def fail(path):
-            return 'foobar https://gubernator.k8s.io/build%s asdf' % path
+            return f'foobar https://gubernator.k8s.io/build{path} asdf'
+
         expect(None, [], [])
         expect('something', [], [])
         expect(fail('/a/b/34/'), [], ['/a/b/34'])

@@ -31,13 +31,13 @@ def simple_hash(s):
 
 def build_cron(key, runs_per_day):
     runs_per_week = 0
-    minute = simple_hash("minutes:" + key) % 60
-    hour = simple_hash("hours:" + key) % 24
-    day_of_week = simple_hash("day_of_week:" + key) % 7
+    minute = simple_hash(f"minutes:{key}") % 60
+    hour = simple_hash(f"hours:{key}") % 24
+    day_of_week = simple_hash(f"day_of_week:{key}") % 7
 
     if runs_per_day > 0:
         hour_denominator = 24 / runs_per_day
-        hour_offset = simple_hash("hours:" + key) % hour_denominator
+        hour_offset = simple_hash(f"hours:{key}") % hour_denominator
         return "%d %d-23/%d * * *" % (minute, hour_offset, hour_denominator), (runs_per_day * 7)
 
     # run Ubuntu 20.04 (Focal) jobs more frequently
@@ -97,14 +97,14 @@ def k8s_version_info(k8s_version):
     return marker, k8s_deploy_url, test_package_bucket, test_package_dir
 
 def create_args(kops_channel, networking, extra_flags, kops_image):
-    args = f"--channel={kops_channel} --networking=" + networking
+    args = f"--channel={kops_channel} --networking={networking}"
 
     image_overridden = False
     if extra_flags:
         for arg in extra_flags:
             if "--image=" in arg:
                 image_overridden = True
-            args = args + " " + arg
+            args = f"{args} {arg}"
     if kops_image and not image_overridden:
         args = f"--image='{kops_image}' {args}"
     return args.strip()
@@ -128,9 +128,10 @@ def latest_aws_image(owner, name, arch='x86_64'):
             },
         ],
     )
-    images = []
-    for image in response['Images']:
-        images.append(image['ImageLocation'].replace('amazon', owner))
+    images = [
+        image['ImageLocation'].replace('amazon', owner)
+        for image in response['Images']
+    ]
     images.sort(reverse=True)
     return images[0]
 

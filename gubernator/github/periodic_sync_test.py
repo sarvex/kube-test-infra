@@ -78,7 +78,7 @@ class SyncTest(main_test.TestBase):
                              headers, _request, response, **_kwargs):
         assert method == 'GET'
         assert headers[0].key() == 'Authorization'
-        assert headers[0].value() == 'token ' + TOKEN
+        assert headers[0].value() == f'token {TOKEN}'
         path = url[url.find('.com')+4:]
         content, response_headers = self.gh_data[path]
         response.set_content(json.dumps(content))

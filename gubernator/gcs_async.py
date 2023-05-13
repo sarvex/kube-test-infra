@@ -39,7 +39,7 @@ def get(url):
         auth_token, _ = app_identity.get_access_token(
             'https://www.googleapis.com/auth/cloud-platform')
         if auth_token:
-            headers['Authorization'] = 'OAuth %s' % auth_token
+            headers['Authorization'] = f'OAuth {auth_token}'
 
     for retry in xrange(6):
         result = yield context.urlfetch(url, headers=headers)
@@ -94,9 +94,9 @@ def listdirs(path):
         path += '/'
     assert path[0] != '/'
     bucket, prefix = path.split('/', 1)
-    url = '%s/%s/o?delimiter=/&prefix=%s' % (STORAGE_API_URL, bucket, prefix)
+    url = f'{STORAGE_API_URL}/{bucket}/o?delimiter=/&prefix={prefix}'
     res = yield get(url)
     if res is None:
         raise ndb.Return(None)
     prefixes = json.loads(res).get('prefixes', [])
-    raise ndb.Return(['%s/%s' % (bucket, prefix) for prefix in prefixes])
+    raise ndb.Return([f'{bucket}/{prefix}' for prefix in prefixes])

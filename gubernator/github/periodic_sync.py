@@ -54,7 +54,7 @@ PULL_API = 'https://api.github.com/repos/%s/pulls?state=open&per_page=100'
 
 
 def get_prs_from_github(token, repo):
-    headers = {'Authorization': 'token %s' % token}
+    headers = {'Authorization': f'token {token}'}
     url = PULL_API % repo
     prs = []
     while True:
@@ -66,11 +66,12 @@ def get_prs_from_github(token, repo):
             # them, which is appropriate.
             return []
         if response.status_code != 200:
-            raise urlfetch.Error('status code %s' % response.status_code)
+            raise urlfetch.Error(f'status code {response.status_code}')
         prs += json.loads(response.content)
-        m = re.search(r'<([^>]+)>; rel="next"', response.headers.get('Link', ''))
-        if m:
-            url = m.group(1)
+        if m := re.search(
+            r'<([^>]+)>; rel="next"', response.headers.get('Link', '')
+        ):
+            url = m[1]
         else:
             break
     logging.info('pr count: %d, github tokens left: %s',
@@ -93,7 +94,7 @@ def sync_repo(token, repo, write_html=None):
         write_html = lambda x: None
 
     logging.info('syncing repo %s', repo)
-    write_html('<h1>%s</h1>' % repo)
+    write_html(f'<h1>{repo}</h1>')
 
     # There is a race condition here:
     # We can't atomically get a list of PRs from the database and GitHub,
@@ -124,7 +125,7 @@ def sync_repo(token, repo, write_html=None):
     logging.info('PRs to open: %s', missing_prs)
 
     write_html('<br>')
-    write_html('PRs that should be closed: %s<br>' % stale_open_prs)
+    write_html(f'PRs that should be closed: {stale_open_prs}<br>')
 
     for number in stale_open_prs:
         pr = prs_db_by_number[number]
@@ -138,7 +139,7 @@ def sync_repo(token, repo, write_html=None):
              'assignees': [{'login': u} for u in pr.payload['assignees']],
              'title': pr.payload['title']})
 
-    write_html('PRs that should be opened: %s<br>' % missing_prs)
+    write_html(f'PRs that should be opened: {missing_prs}<br>')
 
     for number in missing_prs:
         pr = models.shrink(prs_gh_by_number[number])
@@ -164,8 +165,7 @@ class PRSync(webapp2.RequestHandler):
         self.response.write('open repos:')
         self.response.write(', '.join(open_repos))
 
-        repo = self.request.get('repo')
-        if repo:
+        if repo := self.request.get('repo'):
             # debugging case
             sync_repo(token, repo, self.response.write)
         else:

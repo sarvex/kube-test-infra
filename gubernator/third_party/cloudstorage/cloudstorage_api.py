@@ -102,7 +102,7 @@ def open(filename,
                                   buffer_size=read_buffer_size,
                                   offset=offset)
   else:
-    raise ValueError('Invalid mode %s.' % mode)
+    raise ValueError(f'Invalid mode {mode}.')
 
 
 def delete(filename, retry_params=None, _account_id=None):
@@ -149,15 +149,14 @@ def stat(filename, retry_params=None, _account_id=None):
       api_utils._quote_filename(filename))
   errors.check_status(status, [200], filename, resp_headers=headers,
                       body=content)
-  file_stat = common.GCSFileStat(
+  return common.GCSFileStat(
       filename=filename,
       st_size=common.get_stored_content_length(headers),
       st_ctime=common.http_time_to_posix(headers.get('last-modified')),
       etag=headers.get('etag'),
       content_type=headers.get('content-type'),
-      metadata=common.get_metadata(headers))
-
-  return file_stat
+      metadata=common.get_metadata(headers),
+  )
 
 
 def copy2(src, dst, metadata=None, retry_params=None):
@@ -358,7 +357,7 @@ def _validate_compose_list(destination_file, file_list,
       bucket: bucket name extracted from the file paths.
   """
   common.validate_file_path(destination_file)
-  bucket = destination_file[0:(destination_file.index('/', 1) + 1)]
+  bucket = destination_file[:destination_file.index('/', 1) + 1]
   try:
     if isinstance(file_list, types.StringTypes):
       raise TypeError
@@ -398,7 +397,7 @@ def _validate_compose_list(destination_file, file_list,
     list_entry = {}
 
     if meta_data is not None:
-      list_entry.update(meta_data)
+      list_entry |= meta_data
     list_entry['Name'] = source_file
     list_of_files.append(list_entry)
 
@@ -423,7 +422,7 @@ class _Bucket(object):
     self._path = path
     self._options = options.copy()
     self._get_bucket_fut = self._api.get_bucket_async(
-        self._path + '?' + urllib.urlencode(self._options))
+        f'{self._path}?{urllib.urlencode(self._options)}')
     self._last_yield = None
     self._new_max_keys = self._options.get('max-keys')
 
@@ -457,7 +456,7 @@ class _Bucket(object):
 
       if self._should_get_another_batch(content):
         self._get_bucket_fut = self._api.get_bucket_async(
-            self._path + '?' + urllib.urlencode(self._options))
+            f'{self._path}?{urllib.urlencode(self._options)}')
       else:
         self._get_bucket_fut = None
 
@@ -467,19 +466,13 @@ class _Bucket(object):
       next_file = files.next()
       next_dir = dirs.next()
 
-      while ((max_keys is None or total < max_keys) and
-             not (next_file is None and next_dir is None)):
+      while (max_keys is None or total < max_keys) and (next_file is not None
+                                                        or next_dir is not None):
         total += 1
-        if next_file is None:
+        if next_file is None or next_dir is not None and next_dir < next_file:
           self._last_yield = next_dir
           next_dir = dirs.next()
-        elif next_dir is None:
-          self._last_yield = next_file
-          next_file = files.next()
-        elif next_dir < next_file:
-          self._last_yield = next_dir
-          next_dir = dirs.next()
-        elif next_file < next_dir:
+        elif next_dir is None or next_file < next_dir:
           self._last_yield = next_file
           next_file = files.next()
         else:
@@ -510,8 +503,7 @@ class _Bucket(object):
           size = child.text
         elif child.tag == common._T_KEY:
           key = child.text
-      yield common.GCSFileStat(self._path + '/' + key,
-                               size, etag, st_ctime)
+      yield common.GCSFileStat(f'{self._path}/{key}', size, etag, st_ctime)
       e.clear()
     yield None
 
@@ -526,8 +518,12 @@ class _Bucket(object):
     """
     for e in root.getiterator(common._T_COMMON_PREFIXES):
       yield common.GCSFileStat(
-          self._path + '/' + e.find(common._T_PREFIX).text,
-          st_size=None, etag=None, st_ctime=None, is_dir=True)
+          f'{self._path}/{e.find(common._T_PREFIX).text}',
+          st_size=None,
+          etag=None,
+          st_ctime=None,
+          is_dir=True,
+      )
       e.clear()
     yield None
 
@@ -546,8 +542,7 @@ class _Bucket(object):
       return False
 
     elements = self._find_elements(
-        content, set([common._T_IS_TRUNCATED,
-                      common._T_NEXT_MARKER]))
+        content, {common._T_IS_TRUNCATED, common._T_NEXT_MARKER})
     if elements.get(common._T_IS_TRUNCATED, 'false').lower() != 'true':
       return False
 

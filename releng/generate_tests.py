@@ -84,9 +84,7 @@ def substitute(job_name, lines):
 
 def get_args(job_name, field):
     """Returns a list of args for the given field."""
-    if not field:
-        return []
-    return substitute(job_name, field.get('args', []))
+    return [] if not field else substitute(job_name, field.get('args', []))
 
 
 def write_prow_configs_file(output_file, job_defs):
@@ -99,7 +97,7 @@ def write_testgrid_config_file(output_file, testgrid_config):
     """Writes the TestGrid test group configurations into output_file."""
     print(f'writing testgrid configuration to: {output_file}')
     with open(output_file, 'w') as fp:
-        fp.write('# ' + COMMENT + '\n\n')
+        fp.write(f'# {COMMENT}' + '\n\n')
         yaml.dump(testgrid_config, fp)
 
 def apply_job_overrides(envs_or_args, job_envs_or_args):
@@ -107,10 +105,14 @@ def apply_job_overrides(envs_or_args, job_envs_or_args):
     original_envs_or_args = envs_or_args[:]
     for job_env_or_arg in job_envs_or_args:
         name = job_env_or_arg.split('=', 1)[0]
-        env_or_arg = next(
-            (x for x in original_envs_or_args if (x.strip().startswith('%s=' % name) or
-                                                  x.strip() == name)), None)
-        if env_or_arg:
+        if env_or_arg := next(
+            (
+                x
+                for x in original_envs_or_args
+                if x.strip().startswith(f'{name}=') or x.strip() == name
+            ),
+            None,
+        ):
             envs_or_args.remove(env_or_arg)
         envs_or_args.append(job_env_or_arg)
 
@@ -218,17 +220,16 @@ class E2ENodeTest:
         if node_args:
             flag = '--node-args='
             for node_arg in node_args:
-                flag += '%s ' % node_arg
+                flag += f'{node_arg} '
             job_args.append(flag.strip())
 
         job_config['args'] = job_args
 
         if image.get('testgrid_prefix') is not None:
-            dashboard = '%s-%s-%s' % (image['testgrid_prefix'], fields[3],
-                                      fields[4])
+            dashboard = f"{image['testgrid_prefix']}-{fields[3]}-{fields[4]}"
             annotations = prow_config.setdefault('annotations', {})
             annotations['testgrid-dashboards'] = dashboard
-            tab_name = '%s-%s-%s' % (fields[3], fields[4], fields[5])
+            tab_name = f'{fields[3]}-{fields[4]}-{fields[5]}'
             annotations['testgrid-tab-name'] = tab_name
 
         return job_config, prow_config, None
@@ -237,7 +238,7 @@ class E2ENodeTest:
 class E2ETest:
 
     def __init__(self, output_dir, job_name, job, config):
-        self.env_filename = os.path.join(output_dir, '%s.env' % job_name)
+        self.env_filename = os.path.join(output_dir, f'{job_name}.env')
         self.job_name = job_name
         self.job = job
         self.common = config['common']
@@ -300,9 +301,9 @@ class E2ETest:
     def initialize_dashboards_with_release_blocking_info(self, version):
         dashboards = []
         if self.job.get('releaseBlocking'):
-            dashboards.append('sig-release-%s-blocking' % version)
+            dashboards.append(f'sig-release-{version}-blocking')
         elif self.job.get('releaseInforming'):
-            dashboards.append('sig-release-%s-informing' % version)
+            dashboards.append(f'sig-release-{version}-informing')
         else:
             dashboards.append('sig-release-generated')
         return dashboards
@@ -334,17 +335,17 @@ class E2ETest:
         tg_config = self.__get_testgrid_config()
 
         annotations = prow_config.setdefault('annotations', {})
-        tab_name = '%s-%s-%s-%s' % (fields[3], fields[4], fields[5], fields[6])
+        tab_name = f'{fields[3]}-{fields[4]}-{fields[5]}-{fields[6]}'
         annotations['testgrid-tab-name'] = tab_name
         dashboards = self.initialize_dashboards_with_release_blocking_info(k8s_version['version'])
         if image.get('testgrid_prefix') is not None:
-            dashboard = '%s-%s-%s' % (image['testgrid_prefix'], fields[4],
-                                      fields[5])
+            dashboard = f"{image['testgrid_prefix']}-{fields[4]}-{fields[5]}"
             dashboards.append(dashboard)
         annotations['testgrid-dashboards'] = ', '.join(dashboards)
         if 'testgridNumFailuresToAlert' in self.job:
-            annotations['testgrid-num-failures-to-alert'] = ('%s' %
-                                                             self.job['testgridNumFailuresToAlert'])
+            annotations[
+                'testgrid-num-failures-to-alert'
+            ] = f"{self.job['testgridNumFailuresToAlert']}"
 
         return job_config, prow_config, tg_config
 
@@ -388,8 +389,7 @@ def main(yaml_config_path, output_dir, testgrid_output_path):
     with open(yaml_config_path) as fp:
         yaml_config = yaml.load(fp)
 
-    output_config = {}
-    output_config['periodics'] = []
+    output_config = {'periodics': []}
     testgrid_config = {'test_groups': []}
     job_names = sorted(yaml_config['jobs'].keys())
     for job_name in job_names:
@@ -401,7 +401,7 @@ def main(yaml_config_path, output_dir, testgrid_output_path):
             testgrid_config['test_groups'].append(testgrid)
 
     # Write the job definitions to --output-dir/generated.yaml
-    write_prow_configs_file(output_dir + 'generated.yaml', output_config)
+    write_prow_configs_file(f'{output_dir}generated.yaml', output_config)
     write_testgrid_config_file(testgrid_output_path, testgrid_config)
 
 

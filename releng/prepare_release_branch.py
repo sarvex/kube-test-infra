@@ -41,21 +41,15 @@ class ToolError(Exception):
 
 def get_config_files(branch_path):
     print("Retrieving config files...")
-    files = glob.glob(os.path.join(branch_path, "*.yaml"))
-    return files
+    return glob.glob(os.path.join(branch_path, "*.yaml"))
 
 def has_correct_amount_of_configs(branch_path):
     print("Checking config count...")
     files = get_config_files(branch_path)
     if len(files) < min_config_count or len(files) > max_config_count:
         print(
-            "Expected between %s and %s yaml files in %s, but found %s" % (
-                min_config_count,
-                max_config_count,
-                branch_path,
-                len(files),
-                )
-            )
+            f"Expected between {min_config_count} and {max_config_count} yaml files in {branch_path}, but found {len(files)}"
+        )
         return False
     return True
 
@@ -81,7 +75,7 @@ def delete_stale_branch(branch_path, current_version):
     if os.path.exists(filepath):
         os.unlink(filepath)
     else:
-        print("the branch config (%s) does not exist" % filename)
+        print(f"the branch config ({filename}) does not exist")
 
 
 def rotate_files(rotator_bin, branch_path, current_version):
@@ -120,13 +114,11 @@ def update_generated_config(path, latest_version):
         markers = config['k8sVersions'][s]
         markers['version'] = vs
         for j, arg in enumerate(markers['args']):
-            markers['args'][j] = re.sub(
-                r'latest(-\d+\.\d+)?', 'latest-%s' % vs, arg)
+            markers['args'][j] = re.sub(r'latest(-\d+\.\d+)?', f'latest-{vs}', arg)
 
         node = config['nodeK8sVersions'][s]
         for k, arg in enumerate(node['args']):
-            node['args'][k] = re.sub(
-                r'master|release-\d+\.\d+', 'release-%s' % vs, arg)
+            node['args'][k] = re.sub(r'master|release-\d+\.\d+', f'release-{vs}', arg)
         node['prowImage'] = node['prowImage'].rpartition('-')[0] + '-' + vs
 
     with open(path, 'w') as f:
@@ -143,8 +135,7 @@ def go_version_kubernetes_master():
     resp = requests.get(
         'https://raw.githubusercontent.com/kubernetes/kubernetes/master/.go-version')
     resp.raise_for_status()
-    data = resp.content.decode("utf-8")
-    return data
+    return resp.content.decode("utf-8")
 
 def main():
     if os.environ.get('BUILD_WORKSPACE_DIRECTORY'):
@@ -162,11 +153,13 @@ def main():
     print("Current version: %d.%d" % (version[0], version[1]))
 
     go_version = go_version_kubernetes_master()
-    print("Current Go Version: %s" % go_version)
+    print(f"Current Go Version: {go_version}")
 
     files = get_config_files(branch_job_dir_abs)
     if len(files) > max_config_count:
-        print("There should be a maximum of %s release branch configs." % max_config_count)
+        print(
+            f"There should be a maximum of {max_config_count} release branch configs."
+        )
         print("Deleting the oldest config before rotation...")
 
         delete_stale_branch(branch_job_dir_abs, version)

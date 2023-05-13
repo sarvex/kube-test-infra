@@ -120,9 +120,8 @@ class ReadAllTest(unittest.TestCase):
         lines = []
         total = 10
         def more_lines(*_a, **_kw):
-            if len(lines) < total:
-                return [self], [], []
-            return [], [], []
+            return ([self], [], []) if len(lines) < total else ([], [], [])
+
         with Stub(select, 'select', more_lines):
             done = bootstrap.read_all(self.endless, self, lines.append)
 
@@ -375,7 +374,7 @@ class CheckoutTest(unittest.TestCase):
         with Stub(os, 'chdir', Pass):
             bootstrap.checkout(fake, REPO, REPO, BRANCH, None)
 
-        expected_uri = 'https://%s' % REPO
+        expected_uri = f'https://{REPO}'
         self.assertTrue(any(
             expected_uri in cmd for cmd, _, _ in fake.calls if 'fetch' in cmd))
 
@@ -406,7 +405,7 @@ class CheckoutTest(unittest.TestCase):
         with Stub(os, 'chdir', Pass):
             bootstrap.checkout(fake, REPO, repo_path, BRANCH, None)
 
-        expected_uri = 'https://%s' % REPO
+        expected_uri = f'https://{REPO}'
         self.assertTrue(any(
             expected_uri in cmd for cmd, _, _ in fake.calls if 'fetch' in cmd))
 
@@ -547,7 +546,7 @@ class FakeGSUtil(object):
 
     def stat(self, *a, **kw):
         self.stats.append((a, kw))
-        return 'Generation: %s' % self.generation
+        return f'Generation: {self.generation}'
 
     def upload_text(self, *args, **kwargs):
         self.texts.append((args, kwargs))
@@ -568,14 +567,16 @@ class GubernatorUriTest(unittest.TestCase):
     def test_multiple_gs(self):
         uri = 'gs://hello/gs://there'
         self.assertEqual(
-            bootstrap.GUBERNATOR + '/hello/gs:',
-            bootstrap.gubernator_uri(self.create_path(uri)))
+            f'{bootstrap.GUBERNATOR}/hello/gs:',
+            bootstrap.gubernator_uri(self.create_path(uri)),
+        )
 
     def test_gs(self):
         uri = 'gs://blah/blah/blah.txt'
         self.assertEqual(
-            bootstrap.GUBERNATOR + '/blah/blah',
-            bootstrap.gubernator_uri(self.create_path(uri)))
+            f'{bootstrap.GUBERNATOR}/blah/blah',
+            bootstrap.gubernator_uri(self.create_path(uri)),
+        )
 
 
 class AppendResultTest(unittest.TestCase):
@@ -1315,7 +1316,7 @@ class IntegrationTest(unittest.TestCase):
         subprocess.check_call(['git', 'rm', self.MASTER])
         subprocess.check_call(['touch', self.BRANCH_FILE])
         subprocess.check_call(['git', 'add', self.BRANCH_FILE])
-        subprocess.check_call(['git', 'commit', '-m', 'Create %s' % self.BRANCH])
+        subprocess.check_call(['git', 'commit', '-m', f'Create {self.BRANCH}'])
         test_bootstrap(
             job='fake-branch',
             repo=self.REPO,
@@ -1326,7 +1327,8 @@ class IntegrationTest(unittest.TestCase):
         # Verify that the cache was populated by running a simple git command
         # in the git cache directory.
         subprocess.check_call(
-            ['git', '--git-dir=%s/%s' % (self.root_git_cache, self.REPO), 'log'])
+            ['git', f'--git-dir={self.root_git_cache}/{self.REPO}', 'log']
+        )
 
     def test_pr(self):
         subprocess.check_call(['git', 'checkout', 'master'])
@@ -1349,7 +1351,7 @@ class IntegrationTest(unittest.TestCase):
         subprocess.check_call(['git', 'rm', self.MASTER])
         subprocess.check_call(['touch', self.BRANCH_FILE])
         subprocess.check_call(['git', 'add', self.BRANCH_FILE])
-        subprocess.check_call(['git', 'commit', '-m', 'Create %s' % self.BRANCH])
+        subprocess.check_call(['git', 'commit', '-m', f'Create {self.BRANCH}'])
 
         os.chdir('/tmp')
         test_bootstrap(
@@ -1365,27 +1367,29 @@ class IntegrationTest(unittest.TestCase):
         subprocess.check_call(['git', 'rm', self.MASTER])
         subprocess.check_call(['touch', self.BRANCH_FILE])
         subprocess.check_call(['git', 'add', self.BRANCH_FILE])
-        subprocess.check_call(['git', 'commit', '-m', 'Create %s' % self.BRANCH])
+        subprocess.check_call(['git', 'commit', '-m', f'Create {self.BRANCH}'])
         sha = subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
         subprocess.check_call(['rm', self.BRANCH_FILE])
         subprocess.check_call(['git', 'add', self.BRANCH_FILE])
-        subprocess.check_call(['git', 'commit', '-m', 'Delete %s' % self.BRANCH])
+        subprocess.check_call(['git', 'commit', '-m', f'Delete {self.BRANCH}'])
 
         os.chdir('/tmp')
         # Supplying the commit exactly works.
         test_bootstrap(
             job='fake-branch',
             repo=self.REPO,
-            branch='%s:%s' % (self.BRANCH, sha),
+            branch=f'{self.BRANCH}:{sha}',
             pull=None,
-            root=self.root_workspace)
+            root=self.root_workspace,
+        )
         # Supplying the commit through repo works.
         test_bootstrap(
             job='fake-branch',
-            repo="%s=%s:%s" % (self.REPO, self.BRANCH, sha),
+            repo=f"{self.REPO}={self.BRANCH}:{sha}",
             branch=None,
             pull=None,
-            root=self.root_workspace)
+            root=self.root_workspace,
+        )
         # Using branch head fails.
         with self.assertRaises(SystemExit):
             test_bootstrap(
@@ -1397,17 +1401,19 @@ class IntegrationTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             test_bootstrap(
                 job='fake-branch',
-                repo="%s=%s" % (self.REPO, self.BRANCH),
+                repo=f"{self.REPO}={self.BRANCH}",
                 branch=None,
                 pull=None,
-                root=self.root_workspace)
+                root=self.root_workspace,
+            )
 
     def test_batch(self):
         def head_sha():
             # We can't hardcode the SHAs for the test, so we need to determine
             # them after each commit.
             return subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
-        refs = ['master:%s' % head_sha()]
+
+        refs = [f'master:{head_sha()}']
         master_commit_date = int(subprocess.check_output(
             ['git', 'show', '-s', '--format=format:%ct', head_sha()]))
         for pr in (123, 456):

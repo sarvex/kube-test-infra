@@ -47,7 +47,7 @@ class PathTest(unittest.TestCase):
     def test_pr_path(self):
         def check(org, repo, pr, path):
             actual_path = view_pr.pr_path(org, repo, pr, 'kubernetes', 'kubernetes', 'pull_prefix')
-            self.assertEquals(actual_path, '%s/%s' % ('pull_prefix', path))
+            self.assertEquals(actual_path, f'pull_prefix/{path}')
 
         check('kubernetes', 'kubernetes', 1234, 1234)
         check('kubernetes', 'kubernetes', 'batch', 'batch')
@@ -81,11 +81,11 @@ class PRTest(main_test.TestBase):
 
         for job, builds in self.BUILDS.iteritems():
             for build, started, finished in builds:
-                path = '/kubernetes-jenkins/pr-logs/pull/123/%s/%s/' % (job, build)
+                path = f'/kubernetes-jenkins/pr-logs/pull/123/{job}/{build}/'
                 if started:
-                    write(path + 'started.json', started)
+                    write(f'{path}started.json', started)
                 if finished:
-                    write(path + 'finished.json', finished)
+                    write(f'{path}finished.json', finished)
 
     def test_pr_builds(self):
         self.init_pr_directory()
@@ -117,7 +117,7 @@ class PRTest(main_test.TestBase):
 
     def test_pr_build_log_redirect(self):
         path = '123/some-job/55/build-log.txt'
-        response = app.get('/pr/' + path)
+        response = app.get(f'/pr/{path}')
         self.assertEqual(response.status_code, 302)
         self.assertIn('https://storage.googleapis.com', response.location)
         self.assertIn(path, response.location)
@@ -204,7 +204,7 @@ class TestDashboard(main_test.TestBase):
 
         # we have a cookie now: we should get results for 'human'
         cookie = self.make_session(user='human')
-        resp = app.get('/pr', headers={'Cookie': 'session=%s' % cookie})
+        resp = app.get('/pr', headers={'Cookie': f'session={cookie}'})
         self.assertEqual(resp.status_code, 200)
         self.assertIn('huge pr!', resp)
 
@@ -221,8 +221,8 @@ class TestDashboard(main_test.TestBase):
         "Build pages show PR information"
         make_pr(12345, ['human'], {'title': 'huge pr!'})
         build_dir = '/kubernetes-jenkins/pr-logs/pull/12345/e2e/5/'
-        write(build_dir + 'started.json', '{}')
-        resp = app.get('/build' + build_dir)
+        write(f'{build_dir}started.json', '{}')
+        resp = app.get(f'/build{build_dir}')
         self.assertIn('href="/pr/human"', resp)
         self.assertIn('huge pr!', resp)
 
@@ -231,7 +231,7 @@ class TestDashboard(main_test.TestBase):
 
         make_pr(124, ['human'], {'title': 'huge pr', 'attn': {'human': 'help#123#456'}}, repo='k/k')
         cookie = self.make_session(user='human')
-        headers = {'Cookie': 'session=%s' % cookie}
+        headers = {'Cookie': f'session={cookie}'}
 
         def expect_count(count):
             resp = app.get('/pr', headers=headers)

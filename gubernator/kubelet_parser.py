@@ -34,8 +34,6 @@ def parse(lines, highlight_words, filters, objref_dict):
         matched_lines: ordered array of indices of lines to display
         highlight_words: updated highlight_words
     """
-    matched_lines = []
-
     if not filters["pod"] and objref_dict:
         highlight_words = []
 
@@ -46,10 +44,7 @@ def parse(lines, highlight_words, filters, objref_dict):
 
     words_re = regex.combine_wordsRE(highlight_words)
 
-    for n, line in enumerate(lines):
-        if words_re.search(line):
-            matched_lines.append(n)
-
+    matched_lines = [n for n, line in enumerate(lines) if words_re.search(line)]
     return matched_lines, highlight_words
 
 

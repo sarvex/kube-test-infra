@@ -28,7 +28,7 @@ def highlight(line, highlight_words):
     # Join all the words that need to be bolded into one regex
     words_re = regex.combine_wordsRE(highlight_words)
     line = words_re.sub(r'<span class="keyword">\1</span>', line)
-    return '<span class="highlight">%s</span>' % line
+    return f'<span class="highlight">{line}</span>'
 
 
 def log_html(lines, matched_lines, highlight_words, skip_fmt):
@@ -107,11 +107,7 @@ def digest(data, objref_dict=None, filters=None, error_re=regex.error_re,
     if filters is None:
         filters = {'Namespace': '', 'UID': '', 'pod': '', 'ContainerID':''}
 
-    highlight_words = regex.default_words
-
-    if filters["pod"]:
-        highlight_words = [filters["pod"]]
-
+    highlight_words = [filters["pod"]] if filters["pod"] else regex.default_words
     if not (filters["UID"] or filters["Namespace"] or filters["ContainerID"]):
         matched_lines = [n for n, line in enumerate(lines) if error_re.search(line)]
     else:

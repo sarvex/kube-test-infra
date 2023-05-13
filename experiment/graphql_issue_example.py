@@ -39,9 +39,7 @@ def do_github_graphql_request(query, token, variables=None):
     A requests.Response object
     """
     url = "https://api.github.com/graphql"
-    headers = {
-        "Authorization": "bearer " + token,
-    }
+    headers = {"Authorization": f"bearer {token}"}
     data = json.dumps({"query": query, "variables": json.dumps(variables)})
     return requests.post(url, headers=headers, data=data)
 
@@ -127,7 +125,7 @@ def get_all_issues(owner, name, token, issue_func, show_progress=False):
             print(".", end="")
             sys.stdout.flush()
         if response.status_code != 200:
-            raise IOError("failed to fetch issues for repo: %s/%s" % (owner, name))
+            raise IOError(f"failed to fetch issues for repo: {owner}/{name}")
         response_json = response.json()
         # NOTE: this will also contain the rate limit info if we need that later
         # https://developer.github.com/v4/guides/resource-limitations/
@@ -147,10 +145,11 @@ def main():
     parser.add_argument('--repo', default='test-infra')
     parser.add_argument('token', help='GitHub auth token.')
     options = parser.parse_args()
-    print("getting issues for: %s/%s" % (options.org, options.repo))
+    print(f"getting issues for: {options.org}/{options.repo}")
     # TODO: replace this with something more useful?
     def issue_func(issue):
         print(issue)
+
     get_all_issues(options.org, options.repo, options.token, issue_func)
     print("done")
 

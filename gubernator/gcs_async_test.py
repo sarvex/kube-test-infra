@@ -65,14 +65,14 @@ def install_handler(stub, structure, base='pr-logs/pull/'):
 
     for path, subdirs in structure.iteritems():
         path = base + path
-        prefixes_for_paths[path] = ['%s%s/' % (path, d) for d in subdirs]
+        prefixes_for_paths[path] = [f'{path}{d}/' for d in subdirs]
 
     def matches(url):
         return url.startswith(gcs_async.STORAGE_API_URL)
 
     def dispatch(method, url, _payload, _headers):
         if method != 'GET':
-            raise ValueError('unhandled method %s' % method)
+            raise ValueError(f'unhandled method {method}')
         parsed = urlparse.urlparse(url)
         param_dict = urlparse.parse_qs(parsed.query, True)
         prefix = param_dict['prefix'][0]

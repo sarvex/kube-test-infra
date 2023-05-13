@@ -45,7 +45,7 @@ def get_webhook_secret():
 
 def make_signature(body):
     hmac_instance = hmac.HMAC(get_webhook_secret(), body, hashlib.sha1)
-    return 'sha1=' + hmac_instance.hexdigest()
+    return f'sha1={hmac_instance.hexdigest()}'
 
 
 class GithubHandler(webapp2.RequestHandler):
@@ -74,10 +74,7 @@ class GithubHandler(webapp2.RequestHandler):
         elif 'issue' in body_json:
             number = body_json['issue']['number']
 
-        parent = None
-        if number:
-            parent = models.GithubResource.make_key(repo, number)
-
+        parent = models.GithubResource.make_key(repo, number) if number else None
         kwargs = {}
         timestamp = self.request.headers.get('x-timestamp')
         if timestamp is not None:
@@ -143,13 +140,16 @@ class Events(BaseHandler):
             q = models.GithubWebhookRaw.query()
         q = q.order(models.GithubWebhookRaw.timestamp)
         events, next_cursor, more = q.fetch_page(count, start_cursor=cursor)
-        out = []
-        for event in events:
-            out.append({'repo': event.repo,
-                        'event': event.event,
-                        'guid': event.guid,
-                        'timestamp': str(event.timestamp),
-                        'body': json.loads(event.body)})
+        out = [
+            {
+                'repo': event.repo,
+                'event': event.event,
+                'guid': event.guid,
+                'timestamp': str(event.timestamp),
+                'body': json.loads(event.body),
+            }
+            for event in events
+        ]
         resp = {'next': more and next_cursor.urlsafe(), 'calls': out}
         self.response.headers['content-type'] = 'text/json'
         self.response.write(json.dumps(resp, indent=4, sort_keys=True))
@@ -181,12 +181,12 @@ class Timeline(BaseHandler):
             ret = classifier.classify_issue(repo, number)
             self.response.write('<ul><li>pr: %s<li>open: %s<li>involved: %s'
                 % tuple(ret[:3]))
-            self.response.write('<li>last_event_timestamp: %s' % ret[4])
+            self.response.write(f'<li>last_event_timestamp: {ret[4]}')
             self.response.write('<li>payload len: %d' %len(json.dumps(ret[3])))
             self.response.write('<pre>%s</pre></ul>' % cgi.escape(
                 json.dumps(ret[3], indent=2, sort_keys=True)))
         except BaseException:
-            self.response.write('<pre>%s</pre>' % traceback.format_exc())
+            self.response.write(f'<pre>{traceback.format_exc()}</pre>')
 
     def emit_events(self, repo, number):
         ancestor = models.GithubResource.make_key(repo, number)
@@ -208,20 +208,27 @@ class Timeline(BaseHandler):
             body_json = json.loads(event.body)
             models.shrink(body_json)
             if 'issue' in body_json:
-                merged.update(body_json['issue'])
+                merged |= body_json['issue']
             elif 'pull_request' in body_json:
                 merged.update(body_json['pull_request'])
             body = json.dumps(body_json, indent=2)
             action = body_json.get('action')
             sender = body_json.get('sender', {}).get('login')
-            self.response.write('<tr><td>%s\n' % '<td>'.join(str(x) for x in
-                [   # Table columns
-                    event.timestamp,
-                    '%s<br><code>%s</code>' % (event.event, event.guid),
-                    action,
-                    sender,
-                    '<pre>' + cgi.escape(body)
-                ]))
+            self.response.write(
+                (
+                    '<tr><td>%s\n'
+                    % '<td>'.join(
+                        str(x)
+                        for x in [
+                            event.timestamp,
+                            f'{event.event}<br><code>{event.guid}</code>',
+                            action,
+                            sender,
+                            f'<pre>{cgi.escape(body)}',
+                        ]
+                    )
+                )
+            )
         return merged
 
     def get(self):
@@ -235,13 +242,13 @@ class Timeline(BaseHandler):
             return
         self.response.write(
             '<style>td pre{max-height:200px;max-width:800px;overflow:scroll}</style>')
-        self.response.write('<p>Memory: %s' % memory_usage().current())
+        self.response.write(f'<p>Memory: {memory_usage().current()}')
         self.emit_classified(repo, number)
-        self.response.write('<p>Memory: %s' % memory_usage().current())
+        self.response.write(f'<p>Memory: {memory_usage().current()}')
         if self.request.get('classify_only'):
             return
         merged = self.emit_events(repo, number)
-        self.response.write('<p>Memory: %s' % memory_usage().current())
+        self.response.write(f'<p>Memory: {memory_usage().current()}')
         if 'head' in merged:
             sha = merged['head']['sha']
             results = models.GHStatus.query_for_sha(repo, sha)
@@ -252,4 +259,4 @@ class Timeline(BaseHandler):
         models.shrink(merged)
         self.response.write('</table><pre>%s</pre>' % cgi.escape(
             json.dumps(merged, indent=2, sort_keys=True)))
-        self.response.write('<p>Memory: %s' % memory_usage().current())
+        self.response.write(f'<p>Memory: {memory_usage().current()}')

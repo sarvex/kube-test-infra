@@ -47,7 +47,7 @@ if __name__ == '__main__':
             EXTRAS.add(os.path.dirname(real))
             break
     # also do one level up so foo.bar imports work :shrug:
-    EXTRAS = set(os.path.dirname(e) for e in EXTRAS).union(EXTRAS)
+    EXTRAS = {os.path.dirname(e) for e in EXTRAS}.union(EXTRAS)
     # append these to the path
     sys.path.extend(EXTRAS)
 

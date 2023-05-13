@@ -32,7 +32,7 @@ import operator
 
 import requests
 
-def main(): # pylint: disable=too-many-branches
+def main():    # pylint: disable=too-many-branches
     """Run flake detector."""
     res = requests.get(
         'https://prow.k8s.io/prowjobs.js?omit=annotations,labels,decoration_config,pod_spec'
@@ -49,7 +49,7 @@ def main(): # pylint: disable=too-many-branches
             continue
         if spec['refs']['org'] != 'kubernetes' and spec['refs']['repo'] != 'kubernetes':
             continue
-        if status['state'] != 'success' and status['state'] != 'failure':
+        if status['state'] not in ['success', 'failure']:
             continue
         # populate jobs
         if spec['job'] not in jobs:
@@ -68,11 +68,11 @@ def main(): # pylint: disable=too-many-branches
     job_flakes = {}
     for job, shas in jobs.items():
         job_commits[job] = len(shas)
-        job_flakes[job] = 0
-        for results in shas.values():
-            if 'success' in results and 'failure' in results:
-                job_flakes[job] += 1
-
+        job_flakes[job] = sum(
+            1
+            for results in shas.values()
+            if 'success' in results and 'failure' in results
+        )
     print('Certain flakes:')
     for job, flakes in sorted(job_flakes.items(), key=operator.itemgetter(1), reverse=True):
         if job_commits[job] < 10:
@@ -82,7 +82,7 @@ def main(): # pylint: disable=too-many-branches
 
     # for each commit, flaked iff exists job that flaked
     flaked = 0
-    for _, job_results in commits.items():
+    for job_results in commits.values():
         for job, results in job_results.items():
             if 'success' in results and 'failure' in results:
                 flaked += 1

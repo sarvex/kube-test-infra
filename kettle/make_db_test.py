@@ -82,7 +82,7 @@ class GCSClientTest(unittest.TestCase):
         self.client = MockedClient(self.JOBS_DIR)
 
     def test_get_junits(self):
-        junits = self.client.get_junits_from_build(self.JOBS_DIR + 'fake/123')
+        junits = self.client.get_junits_from_build(f'{self.JOBS_DIR}fake/123')
         self.assertEqual(
             sorted(junits),
             ['gs://kubernetes-jenkins/logs/fake/123/artifacts/junit_01.xml'])
@@ -145,12 +145,16 @@ class MainTest(unittest.TestCase):
     @staticmethod
     def get_expected_builds():
         return {
-            MockedClient.JOB_DIR.replace('123', '122')[:-1]:
-                (None, {'timestamp': 123}, []),
-            MockedClient.JOB_DIR[:-1]:
-                ({'timestamp': MockedClient.NOW - 5},
-                 {'timestamp': MockedClient.NOW, 'result': 'SUCCESS'},
-                 [MockedClient.gets[MockedClient.ART_DIR + 'junit_01.xml']])
+            MockedClient.JOB_DIR.replace('123', '122')[:-1]: (
+                None,
+                {'timestamp': 123},
+                [],
+            ),
+            MockedClient.JOB_DIR[:-1]: (
+                {'timestamp': MockedClient.NOW - 5},
+                {'timestamp': MockedClient.NOW, 'result': 'SUCCESS'},
+                [MockedClient.gets[f'{MockedClient.ART_DIR}junit_01.xml']],
+            ),
         }
 
     def assert_main_output(self, threads, expected=None, db=None,
@@ -182,21 +186,24 @@ class MainTest(unittest.TestCase):
             </testsuite>
         '''
 
+
+
         class MockedClientNewer(MockedClient):
             NOW = static_epoch
             LOG_DIR = 'gs://kubernetes-jenkins/logs/'
-            JOB_DIR = LOG_DIR + 'fake/124/'
-            ART_DIR = JOB_DIR + 'artifacts/'
+            JOB_DIR = f'{LOG_DIR}fake/124/'
+            ART_DIR = f'{JOB_DIR}artifacts/'
             lists = {
-                LOG_DIR: [LOG_DIR + 'fake/'],
-                LOG_DIR + 'fake/': [JOB_DIR, LOG_DIR + 'fake/123/'],
-                ART_DIR: [ART_DIR + 'junit_01.xml'],
+                LOG_DIR: [f'{LOG_DIR}fake/'],
+                f'{LOG_DIR}fake/': [JOB_DIR, f'{LOG_DIR}fake/123/'],
+                ART_DIR: [f'{ART_DIR}junit_01.xml'],
                 'gs://kubernetes-jenkins/pr-logs/directory/': [],
             }
             gets = {
-                JOB_DIR + 'finished.json': {'timestamp': NOW},
-                ART_DIR + 'junit_01.xml': new_junit,
+                f'{JOB_DIR}finished.json': {'timestamp': NOW},
+                f'{ART_DIR}junit_01.xml': new_junit,
             }
+
 
         expected = self.get_expected_builds()
         expected[MockedClientNewer.JOB_DIR[:-1]] = (

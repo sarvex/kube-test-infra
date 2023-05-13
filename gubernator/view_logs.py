@@ -28,8 +28,11 @@ def find_log_junit(build_dir, junit, log_file):
     Looks in build_dir for log_file in a folder that
     also includes the junit file.
     """
-    tmps = [f.filename for f in view_base.gcs_ls('%s/artifacts' % build_dir)
-            if '/tmp-node' in f.filename]
+    tmps = [
+        f.filename
+        for f in view_base.gcs_ls(f'{build_dir}/artifacts')
+        if '/tmp-node' in f.filename
+    ]
     for folder in tmps:
         filenames = [f.filename for f in view_base.gcs_ls(folder)]
         if folder + junit in filenames:
@@ -44,10 +47,7 @@ def find_log_files(all_logs, log_file):
     """
     log_files = []
     for folder in all_logs.itervalues():
-        for log in folder:
-            if log_file in log:
-                log_files.append(log)
-
+        log_files.extend(log for log in folder if log_file in log)
     return log_files
 
 
@@ -59,15 +59,17 @@ def get_all_logs(directory, artifacts):
     """
     log_files = {}
     if artifacts:
-        dirs = [f.filename for f in view_base.gcs_ls('%s/artifacts' % directory)
-                if f.is_dir]
+        dirs = [
+            f.filename
+            for f in view_base.gcs_ls(f'{directory}/artifacts')
+            if f.is_dir
+        ]
     else:
         dirs = [directory]
     for d in dirs:
         log_files[d] = []
         for f in view_base.gcs_ls(d):
-            log_name = regex.log_re.search(f.filename)
-            if log_name:
+            if log_name := regex.log_re.search(f.filename):
                 log_files[d].append(f.filename)
     return log_files
 
@@ -77,10 +79,7 @@ def parse_log_file(log_filename, pod, filters=None, make_dict=False, objref_dict
     log = gcs_async.read(log_filename).get_result()
     if log is None:
         return {}, False if make_dict else None
-    if pod:
-        bold_re = regex.wordRE(pod)
-    else:
-        bold_re = regex.error_re
+    bold_re = regex.wordRE(pod) if pod else regex.error_re
     if objref_dict is None:
         objref_dict = {}
     if make_dict and pod:
@@ -117,16 +116,16 @@ def get_logs_no_pod(apiserver_filename, kubelet_filenames, filters, objref_dict,
     results = {}
     if apiserver_filename:
         for apiserver_log in apiserver_filename:
-            parsed_file = parse_log_file(apiserver_log, "", filters,
-            objref_dict=objref_dict)
-            if parsed_file:
+            if parsed_file := parse_log_file(
+                apiserver_log, "", filters, objref_dict=objref_dict
+            ):
                 results[apiserver_log] = parsed_file
         return all_logs, results, objref_dict, apiserver_filename
     else:
         for kubelet_log in kubelet_filenames:
-            parsed_file = parse_log_file(kubelet_log, "", filters,
-            objref_dict=objref_dict)
-            if parsed_file:
+            if parsed_file := parse_log_file(
+                kubelet_log, "", filters, objref_dict=objref_dict
+            ):
                 results[kubelet_log] = parsed_file
         return all_logs, results, objref_dict, kubelet_filenames
 
@@ -161,9 +160,9 @@ def get_logs(build_dir, log_files, pod_name, filters, objref_dict):
                 if apiserver_filename:
                     log_files.extend(apiserver_filename)
             for log_file in log_files:
-                parsed_file = parse_log_file(log_file, pod_name, filters,
-                    objref_dict=objref_dict)
-                if parsed_file:
+                if parsed_file := parse_log_file(
+                    log_file, pod_name, filters, objref_dict=objref_dict
+                ):
                     results[log_file] = parsed_file
             break
 
@@ -190,16 +189,15 @@ def get_woven_logs(log_files, pod, filters, objref_dict):
                 # add beginning of file to first timestamp line
                 line = first_combined + line
             combined_lines.append(line)
+        elif combined_lines:
+            combined_lines[-1] = combined_lines[-1] + line
         else:
-            if not combined_lines:
-                first_combined = first_combined + line
-            else:
-                combined_lines[-1] = combined_lines[-1] + line
+            first_combined = first_combined + line
     lines = sorted(combined_lines, key=regex.sub_timestamp)
     data = '\n'.join(lines)
-    woven_logs = log_parser.digest(data, error_re=pod_re,
-        filters=filters, objref_dict=objref_dict)
-    return woven_logs
+    return log_parser.digest(
+        data, error_re=pod_re, filters=filters, objref_dict=objref_dict
+    )
 
 
 def parse_by_timestamp((build_dir, junit, log_files, pod, filters, objref_dict)):
@@ -232,7 +230,7 @@ class NodeLogHandler(view_base.BaseHandler):
         all_logs: {"folder_name":["a.log", "b.log"]}
         """
         # pylint: disable=too-many-locals
-        job_dir = '/%s/%s/' % (prefix, job)
+        job_dir = f'/{prefix}/{job}/'
         build_dir = job_dir + build
         log_files = self.request.get_all("logfiles")
         others = self.request.get_all("others")

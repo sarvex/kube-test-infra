@@ -37,7 +37,7 @@ SECONDS_PER_DAY = 86400
 
 def buckets_yaml():
     import ruamel.yaml as yaml  # pylint: disable=import-outside-toplevel
-    with open(os.path.dirname(os.path.abspath(__file__))+'/buckets.yaml') as fp:
+    with open(f'{os.path.dirname(os.path.abspath(__file__))}/buckets.yaml') as fp:
         return yaml.safe_load(fp)
 
 # pypy compatibility hack
@@ -176,9 +176,7 @@ def parse_junit(xml):
             if time is None:
                 return {'name': name, 'failed': True, 'failure_text': failure_text}
             return {'name': name, 'time': time, 'failed': True, 'failure_text': failure_text}
-        if time is None:
-            return {'name': name}
-        return {'name': name, 'time': time}
+        return {'name': name} if time is None else {'name': name, 'time': time}
 
     # Note: skipped tests are ignored because they make rows too large for BigQuery.
     # Knowing that a given build could have ran a test but didn't for some reason
@@ -214,7 +212,7 @@ def parse_junit(xml):
         for testsuite in tree:
             suite_name = testsuite.attrib.get('name', '<unspecified>')
             for child in testsuite.findall('testcase'):
-                name = '%s %s' % (suite_name, child.attrib.get('name', '<unspecified>'))
+                name = f"{suite_name} {child.attrib.get('name', '<unspecified>')}"
                 time, failure_text, skipped = parse_result(child)
                 if skipped:
                     continue
@@ -321,10 +319,7 @@ def main(db, opts, outfile):
         oldest = db.get_oldest_emitted(incremental_table)
         if oldest is None:
             return 1 # if the table is empty, allow cycle
-        if oldest < time.time() - opts.assert_oldest * SECONDS_PER_DAY:
-            return 1 # if table is outdated, allow cycle
-        return 0
-
+        return 1 if oldest < time.time() - opts.assert_oldest * SECONDS_PER_DAY else 0
     if opts.reset_emitted:
         db.reset_emitted(incremental_table)
 

@@ -58,7 +58,7 @@ class TestGithubAuth(unittest.TestCase):
 
     @staticmethod
     def do_phase1(arg=''):
-        return app.get('/github_auth' + arg)
+        return app.get(f'/github_auth{arg}')
 
     @staticmethod
     def parse_phase1(phase1):
