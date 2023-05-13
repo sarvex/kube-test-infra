@@ -51,7 +51,7 @@ def move_annotations(f):
         for lvl2 in lvl1.values():
             if isinstance(lvl2, ruamel.yaml.comments.CommentedSeq):
                 for job in lvl2:
-                    if not 'annotations' in job:
+                    if 'annotations' not in job:
                         continue
                     job.move_to_end('annotations', last=False)
                     job.move_to_end('name', last=False)
@@ -60,7 +60,7 @@ def move_annotations(f):
                     if isinstance(lvl3, bool):
                         continue
                     for job in lvl3:
-                        if not 'annotations' in job:
+                        if 'annotations' not in job:
                             continue
                         job.move_to_end('annotations', last=False)
                         job.move_to_end('name', last=False)

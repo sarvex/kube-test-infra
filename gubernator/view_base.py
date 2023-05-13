@@ -31,10 +31,11 @@ import secrets
 import filters as jinja_filters
 
 JINJA_ENVIRONMENT = jinja2.Environment(
-    loader=jinja2.FileSystemLoader(os.path.dirname(__file__) + '/templates'),
+    loader=jinja2.FileSystemLoader(f'{os.path.dirname(__file__)}/templates'),
     extensions=['jinja2.ext.autoescape', 'jinja2.ext.loopcontrols'],
     trim_blocks=True,
-    autoescape=True)
+    autoescape=True,
+)
 JINJA_ENVIRONMENT.line_statement_prefix = '%'
 jinja_filters.register(JINJA_ENVIRONMENT.filters)
 
@@ -62,7 +63,7 @@ class BaseHandler(webapp2.RequestHandler):
         # https://www.owasp.org/index.php/Cross-Site_Request_Forgery_(CSRF)_Prevention_Cheat_Sheet
         #     #Checking_The_Referer_Header
         origin = self.request.headers.get('origin') + '/'
-        expected = self.request.host_url + '/'
+        expected = f'{self.request.host_url}/'
         if not (origin and origin == expected):
             logging.error('csrf check failed for %s, origin: %r', self.request.url, origin)
             self.abort(403)
@@ -124,26 +125,27 @@ def memcache_memoize(prefix, expires=60 * 60, neg_expires=60):
     def wrapper(func):
         @functools.wraps(func)
         def wrapped(*args):
-            key = '%s%s' % (prefix, args)
+            key = f'{prefix}{args}'
             data = memcache.get(key, namespace=namespace)
             if data is not None:
                 return data
-            else:
-                data = func(*args)
-                serialized_length = len(pickle.dumps(data, pickle.HIGHEST_PROTOCOL))
-                if serialized_length > 1000000:
-                    logging.warning('data too large to fit in memcache: %s > 1MB',
-                                    serialized_length)
-                    return data
-                try:
-                    if data:
-                        memcache.add(key, data, expires, namespace=namespace)
-                    else:
-                        memcache.add(key, data, neg_expires, namespace=namespace)
-                except ValueError:
-                    logging.exception('unable to write to memcache')
+            data = func(*args)
+            serialized_length = len(pickle.dumps(data, pickle.HIGHEST_PROTOCOL))
+            if serialized_length > 1000000:
+                logging.warning('data too large to fit in memcache: %s > 1MB',
+                                serialized_length)
                 return data
+            try:
+                if data:
+                    memcache.add(key, data, expires, namespace=namespace)
+                else:
+                    memcache.add(key, data, neg_expires, namespace=namespace)
+            except ValueError:
+                logging.exception('unable to write to memcache')
+            return data
+
         return wrapped
+
     return wrapper
 
 

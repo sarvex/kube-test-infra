@@ -76,10 +76,7 @@ def parse(file, namespaces=True, forbid_dtd=False, forbid_entities=True,
 
     'file' may be either a file name or an open file object.
     """
-    if namespaces:
-        build_builder = DefusedExpatBuilderNS
-    else:
-        build_builder = DefusedExpatBuilder
+    build_builder = DefusedExpatBuilderNS if namespaces else DefusedExpatBuilder
     builder = build_builder(forbid_dtd=forbid_dtd,
                             forbid_entities=forbid_entities,
                             forbid_external=forbid_external)
@@ -100,10 +97,7 @@ def parseString(string, namespaces=True, forbid_dtd=False,
     """Parse a document from a string, returning the resulting
     Document node.
     """
-    if namespaces:
-        build_builder = DefusedExpatBuilderNS
-    else:
-        build_builder = DefusedExpatBuilder
+    build_builder = DefusedExpatBuilderNS if namespaces else DefusedExpatBuilder
     builder = build_builder(forbid_dtd=forbid_dtd,
                             forbid_entities=forbid_entities,
                             forbid_external=forbid_external)

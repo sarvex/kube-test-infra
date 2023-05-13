@@ -55,10 +55,7 @@ def defused_gzip_decode(data, limit=None):
     f = io.BytesIO(data)
     gzf = gzip.GzipFile(mode="rb", fileobj=f)
     try:
-        if limit < 0: # no limit
-            decoded = gzf.read()
-        else:
-            decoded = gzf.read(limit + 1)
+        decoded = gzf.read() if limit < 0 else gzf.read(limit + 1)
     except IOError:
         raise ValueError("invalid data")
     f.close()
@@ -90,16 +87,15 @@ class DefusedGzipDecodedResponse(gzip.GzipFile if gzip else object):
         gzip.GzipFile.__init__(self, mode="rb", fileobj=self.stringio)
 
     def read(self, n):
-        if self.limit >= 0:
-            left = self.limit - self.readlength
-            n = min(n, left + 1)
-            data = gzip.GzipFile.read(self, n)
-            self.readlength += len(data)
-            if self.readlength > self.limit:
-                raise ValueError("max payload length exceeded")
-            return data
-        else:
+        if self.limit < 0:
             return gzip.GzipFile.read(self, n)
+        left = self.limit - self.readlength
+        n = min(n, left + 1)
+        data = gzip.GzipFile.read(self, n)
+        self.readlength += len(data)
+        if self.readlength > self.limit:
+            raise ValueError("max payload length exceeded")
+        return data
 
     def close(self):
         gzip.GzipFile.close(self)

@@ -16,8 +16,6 @@ def defuse_stdlib():
 
     :warning: The monkey patch is an EXPERIMETNAL feature.
     """
-    defused = {}
-
     from . import cElementTree
     from . import ElementTree
     from . import minidom
@@ -28,8 +26,7 @@ def defuse_stdlib():
     from . import xmlrpc
 
     xmlrpc.monkey_patch()
-    defused[xmlrpc] = None
-
+    defused = {xmlrpc: None}
     for defused_mod in [cElementTree, ElementTree, minidom, pulldom, sax,
                         expatbuilder, expatreader]:
         stdlib_mod = _apply_defusing(defused_mod)

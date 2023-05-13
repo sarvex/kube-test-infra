@@ -185,20 +185,18 @@ class _StorageApi(rest_api._RestApi):
 
     for meta_data in file_list:
       xml_setting_list.append('<Component>')
-      for key, val in meta_data.iteritems():
-        xml_setting_list.append('<%s>%s</%s>' % (key, val, key))
+      xml_setting_list.extend(f'<{key}>{val}</{key}>'
+                              for key, val in meta_data.iteritems())
       xml_setting_list.append('</Component>')
     xml_setting_list.append('</ComposeRequest>')
     xml = ''.join(xml_setting_list)
 
-    if content_type is not None:
-      headers = {'Content-Type': content_type}
-    else:
-      headers = None
+    headers = {'Content-Type': content_type} if content_type is not None else None
     status, resp_headers, content = self.put_object(
-        api_utils._quote_filename(destination_file) + '?compose',
+        f'{api_utils._quote_filename(destination_file)}?compose',
         payload=xml,
-        headers=headers)
+        headers=headers,
+    )
     errors.check_status(status, [200], destination_file, resp_headers,
                         body=content)
 
@@ -315,10 +313,10 @@ class ReadBuffer(object):
     return self
 
   def next(self):
-    line = self.readline()
-    if not line:
+    if line := self.readline():
+      return line
+    else:
       raise StopIteration()
-    return line
 
   def readline(self, size=-1):
     """Read one line delimited by '\n' from the file.
@@ -393,10 +391,7 @@ class ReadBuffer(object):
         data_list.append(self._buffer.read())
 
         if self._buffer_future is None:
-          if size < 0 or size >= self._remaining():
-            needs = self._remaining()
-          else:
-            needs = size
+          needs = self._remaining() if size < 0 or size >= self._remaining() else size
           data_list.extend(self._get_segments(self._offset, needs))
           self._offset += needs
           break
@@ -476,13 +471,14 @@ class ReadBuffer(object):
     """
     end = start + request_size - 1
     content_range = '%d-%d' % (start, end)
-    headers = {'Range': 'bytes=' + content_range}
+    headers = {'Range': f'bytes={content_range}'}
     status, resp_headers, content = yield self._api.get_object_async(
         self._path, headers=headers)
     def _checker():
       errors.check_status(status, [200, 206], self._path, headers,
                           resp_headers, body=content)
       self._check_etag(resp_headers.get('etag'))
+
     if check_response:
       _checker()
       raise ndb.Return(content)
@@ -551,7 +547,7 @@ class ReadBuffer(object):
     elif whence == os.SEEK_END:
       self._offset = self._file_size + offset
     else:
-      raise ValueError('Whence mode %s is invalid.' % str(whence))
+      raise ValueError(f'Whence mode {str(whence)} is invalid.')
 
     self._offset = min(self._offset, self._file_size)
     self._offset = max(self._offset, 0)
@@ -604,10 +600,7 @@ class _Buffer(object):
     Returns:
       Requested bytes from buffer.
     """
-    if size < 0:
-      offset = len(self._buffer)
-    else:
-      offset = self._offset + size
+    offset = len(self._buffer) if size < 0 else self._offset + size
     return self.read_to_offset(offset)
 
   def read_to_offset(self, offset):
@@ -693,7 +686,7 @@ class StreamingBuffer(object):
     if content_type:
       headers['content-type'] = content_type
     if gcs_headers:
-      headers.update(gcs_headers)
+      headers |= gcs_headers
     status, resp_headers, content = self._api.post_object(path, headers=headers)
     errors.check_status(status, [201], path, headers, resp_headers,
                         body=content)
@@ -701,7 +694,7 @@ class StreamingBuffer(object):
     if not loc:
       raise IOError('No location header found in 201 response')
     parsed = urlparse.urlparse(loc)
-    self._path_with_token = '%s?%s' % (self._path, parsed.query)
+    self._path_with_token = f'{self._path}?{parsed.query}'
 
   def __getstate__(self):
     """Store state as part of serialization/pickling.
@@ -751,7 +744,7 @@ class StreamingBuffer(object):
     """
     self._check_open()
     if not isinstance(data, str):
-      raise TypeError('Expected str but got %s.' % type(data))
+      raise TypeError(f'Expected str but got {type(data)}.')
     if not data:
       return
     self._buffer.append(data)
@@ -861,14 +854,11 @@ class StreamingBuffer(object):
       headers['content-range'] = ('bytes %d-%d/%s' %
                                   (start_offset, end_offset, file_len))
     else:
-      headers['content-range'] = ('bytes */%s' % file_len)
+      headers['content-range'] = f'bytes */{file_len}'
 
     status, response_headers, content = self._api.put_object(
         self._path_with_token, payload=data, headers=headers)
-    if file_len == '*':
-      expected = 308
-    else:
-      expected = 200
+    expected = 308 if file_len == '*' else 200
     errors.check_status(status, [expected], self._path, headers,
                         response_headers, content,
                         {'upload_path': self._path_with_token})

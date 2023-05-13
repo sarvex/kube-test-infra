@@ -24,7 +24,7 @@ class GithubResource(ndb.Model):
     # each Issue/PR, for easy ancestor queries.
     @staticmethod
     def make_key(repo, number):
-        return ndb.Key(GithubResource, '%s %s' % (repo, number))
+        return ndb.Key(GithubResource, f'{repo} {number}')
 
 
 def shrink(body):
@@ -72,13 +72,12 @@ def from_iso8601(t):
 
 
 def make_kwargs(body, fields):
-    kwargs = {}
-    for field in fields:
-        if field.endswith('_at'):
-            kwargs[field] = from_iso8601(body[field])
-        else:
-            kwargs[field] = body[field]
-    return kwargs
+    return {
+        field: from_iso8601(body[field])
+        if field.endswith('_at')
+        else body[field]
+        for field in fields
+    }
 
 
 class GHStatus(ndb.Model):
@@ -138,7 +137,7 @@ class GHIssueDigest(ndb.Model):
 
     @staticmethod
     def make_key(repo, number):
-        return ndb.Key(GHIssueDigest, '%s %s' % (repo, number))
+        return ndb.Key(GHIssueDigest, f'{repo} {number}')
 
     @staticmethod
     def make(repo, number, is_pr, is_open, involved, payload, updated_at):

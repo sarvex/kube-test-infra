@@ -154,7 +154,7 @@ class BuildTest(main_test.TestBase):
         testgrid_test.write_config()
 
     def get_build_page(self, trailing=''):
-        return app.get('/build' + self.BUILD_DIR + trailing)
+        return app.get(f'/build{self.BUILD_DIR}{trailing}')
 
     def test_missing(self):
         """Test that a missing build gives a 404."""
@@ -166,7 +166,7 @@ class BuildTest(main_test.TestBase):
         """Test that a missing started.json still renders a proper page."""
         build_dir = '/kubernetes-jenkins/logs/job-with-no-started/1234/'
         init_build(build_dir, started=False)
-        response = app.get('/build' + build_dir)
+        response = app.get(f'/build{build_dir}')
         self.assertRegexpMatches(response.body, 'Result.*SUCCESS')
         self.assertIn('job-with-no-started', response)
         self.assertNotIn('Started', response)  # no start timestamp
@@ -176,7 +176,7 @@ class BuildTest(main_test.TestBase):
         """Test that a missing finished.json still renders a proper page."""
         build_dir = '/kubernetes-jenkins/logs/job-still-running/1234/'
         init_build(build_dir, finished=False)
-        response = app.get('/build' + build_dir)
+        response = app.get(f'/build{build_dir}')
         self.assertRegexpMatches(response.body, 'Result.*Not Finished')
         self.assertIn('job-still-running', response)
         self.assertIn('Started', response)
@@ -200,29 +200,29 @@ class BuildTest(main_test.TestBase):
 
     def test_build_no_failures(self):
         """Test that builds with no Junit artifacts work."""
-        gcs.delete(self.BUILD_DIR + 'artifacts/junit_01.xml')
+        gcs.delete(f'{self.BUILD_DIR}artifacts/junit_01.xml')
         response = self.get_build_page()
         self.assertIn('No Test Failures', response)
 
     def test_show_metadata(self):
-        write(self.BUILD_DIR + 'started.json',
+        write(
+            f'{self.BUILD_DIR}started.json',
             {
                 'revision': 'v1+56',
                 'timestamp': 1406535800,
                 'node': 'agent-light-7',
                 'pull': 'master:1234,35:abcd,72814',
-                'metadata': {
-                    'master-version': 'm12'
-                }
-            })
-        write(self.BUILD_DIR + 'finished.json',
+                'metadata': {'master-version': 'm12'},
+            },
+        )
+        write(
+            f'{self.BUILD_DIR}finished.json',
             {
                 'timestamp': 1406536800,
                 'passed': True,
-                'metadata': {
-                    'skew-version': 'm11'
-                }
-            })
+                'metadata': {'skew-version': 'm11'},
+            },
+        )
         response = self.get_build_page()
         self.assertIn('v1+56', response)
         self.assertIn('agent-light-7', response)
@@ -234,17 +234,21 @@ class BuildTest(main_test.TestBase):
 
     def test_build_show_log(self):
         """Test that builds that failed with no failures show the build log."""
-        gcs.delete(self.BUILD_DIR + 'artifacts/junit_01.xml')
-        write(self.BUILD_DIR + 'finished.json',
-              {'passed': False, 'timestamp': 1406536800})
+        gcs.delete(f'{self.BUILD_DIR}artifacts/junit_01.xml')
+        write(
+            f'{self.BUILD_DIR}finished.json',
+            {'passed': False, 'timestamp': 1406536800},
+        )
 
         # Unable to fetch build-log.txt, still works.
         response = self.get_build_page()
         self.assertNotIn('Error lines', response)
 
         self.testbed.init_memcache_stub()  # clear cached result
-        write(self.BUILD_DIR + 'build-log.txt',
-              u'ERROR: test \u039A\n\n\n\n\n\n\n\n\nblah'.encode('utf8'))
+        write(
+            f'{self.BUILD_DIR}build-log.txt',
+            u'ERROR: test \u039A\n\n\n\n\n\n\n\n\nblah'.encode('utf8'),
+        )
         response = self.get_build_page()
         self.assertIn('Error lines', response)
         self.assertIn('No Test Failures', response)
@@ -261,7 +265,7 @@ class BuildTest(main_test.TestBase):
 
     def test_build_optional_log(self):
         """Test that passing builds do not show logs by default but display them when requested"""
-        write(self.BUILD_DIR + 'build-log.txt', 'error or timeout or something')
+        write(f'{self.BUILD_DIR}build-log.txt', 'error or timeout or something')
         response = self.get_build_page()
         self.assertIn('<a href="?log#log">', response)
         self.assertNotIn('timeout', response)
@@ -273,20 +277,23 @@ class BuildTest(main_test.TestBase):
     def test_build_testgrid_links(self):
         response = self.get_build_page()
         base = 'https://testgrid.k8s.io/k8s#ajob'
-        self.assertIn('a href="%s"' % base, response)
+        self.assertIn(f'a href="{base}"', response)
         option = '&amp;include-filter-by-regex=%5EOverall%24%7CThird'
-        self.assertIn('a href="%s%s"' % (base, option), response)
+        self.assertIn(f'a href="{base}{option}"', response)
 
     def test_build_failure_no_text(self):
         # Some failures don't have any associated text.
-        write(self.BUILD_DIR + 'artifacts/junit_01.xml', """
+        write(
+            f'{self.BUILD_DIR}artifacts/junit_01.xml',
+            """
             <testsuites>
                 <testsuite tests="1" failures="1" time="3.274" name="k8s.io/test/integration">
                     <testcase classname="integration" name="TestUnschedulableNodes" time="0.210">
                         <failure message="Failed" type=""/>
                     </testcase>
                 </testsuite>
-            </testsuites>""")
+            </testsuites>""",
+        )
         response = self.get_build_page()
         self.assertIn('TestUnschedulableNodes', response)
         self.assertIn('junit_01.xml', response)
@@ -320,7 +327,7 @@ class BuildTest(main_test.TestBase):
     def test_github_commit_links(self):
         def check(build_dir, result):
             init_build(build_dir)
-            response = app.get('/build' + build_dir)
+            response = app.get(f'/build{build_dir}')
             self.assertIn(result, response)
 
         check('/kubernetes-jenkins/logs/ci-kubernetes-e2e/2/',
@@ -334,14 +341,14 @@ class BuildTest(main_test.TestBase):
         """ The build page for a PR build links to the PR results."""
         build_dir = '/kubernetes-jenkins/pr-logs/pull/123/e2e/567/'
         init_build(build_dir)
-        response = app.get('/build' + build_dir)
+        response = app.get(f'/build{build_dir}')
         self.assertIn('PR #123', response)
         self.assertIn('href="/pr/123"', response)
 
     def test_build_pr_link_other(self):
         build_dir = '/kubernetes-jenkins/pr-logs/pull/charts/123/e2e/567/'
         init_build(build_dir)
-        response = app.get('/build' + build_dir)
+        response = app.get(f'/build{build_dir}')
         self.assertIn('PR #123', response)
         self.assertIn('href="/pr/charts/123"', response)
 
@@ -350,7 +357,7 @@ class BuildTest(main_test.TestBase):
         github.models.GHIssueDigest.make(
             'org/repo', 123, True, True, [],
             {'xrefs': [self.BUILD_DIR[:-1]], 'title': 'an update on testing'}, None).put()
-        response = app.get('/build' + self.BUILD_DIR)
+        response = app.get(f'/build{self.BUILD_DIR}')
         self.assertIn('PR #123', response)
         self.assertIn('an update on testing', response)
         self.assertIn('org/repo/issues/123', response)
@@ -360,7 +367,7 @@ class BuildTest(main_test.TestBase):
         github.models.GHIssueDigest.make(
             'org/repo', 123, False, True, [],
             {'xrefs': [self.BUILD_DIR[:-1]], 'title': 'an update on testing'}, None).put()
-        response = app.get('/builds' + self.JOB_DIR)
+        response = app.get(f'/builds{self.JOB_DIR}')
         self.assertIn('#123', response)
         self.assertIn('an update on testing', response)
         self.assertIn('org/repo/issues/123', response)
@@ -368,18 +375,18 @@ class BuildTest(main_test.TestBase):
     def test_cache(self):
         """Test that caching works at some level."""
         response = self.get_build_page()
-        gcs.delete(self.BUILD_DIR + 'started.json')
-        gcs.delete(self.BUILD_DIR + 'finished.json')
+        gcs.delete(f'{self.BUILD_DIR}started.json')
+        gcs.delete(f'{self.BUILD_DIR}finished.json')
         response2 = self.get_build_page()
         self.assertEqual(str(response), str(response2))
 
     def test_build_directory_redir(self):
         build_dir = '/kubernetes-jenkins/pr-logs/directory/somejob/1234'
         target_dir = '/kubernetes-jenkins/pr-logs/pull/45/somejob/1234'
-        write(build_dir + '.txt', 'gs:/' + target_dir)
-        resp = app.get('/build' + build_dir)
+        write(f'{build_dir}.txt', f'gs:/{target_dir}')
+        resp = app.get(f'/build{build_dir}')
         self.assertEqual(resp.status_code, 302)
-        self.assertEqual(resp.location, 'http://localhost/build' + target_dir)
+        self.assertEqual(resp.location, f'http://localhost/build{target_dir}')
 
     def do_view_build_list_test(self, job_dir='/buck/some-job/', indirect=False):
         sta_result = {'timestamp': 12345}
@@ -391,17 +398,25 @@ class BuildTest(main_test.TestBase):
             for n in xrange(120):
                 write('%sdirectory/%d.txt' % (job_dir, n), 'gs:/%s%d' % (job_dir, n))
 
-        view_target = job_dir if not indirect else job_dir + 'directory/'
+        view_target = job_dir if not indirect else f'{job_dir}directory/'
 
         builds, _ = view_build.build_list(view_target, None)
-        self.assertEqual(builds,
-                         [(str(n), '%s%s' % (job_dir, n), sta_result, fin_result)
-                          for n in range(119, 79, -1)])
+        self.assertEqual(
+            builds,
+            [
+                (str(n), f'{job_dir}{n}', sta_result, fin_result)
+                for n in range(119, 79, -1)
+            ],
+        )
         # test that ?before works
         builds, _ = view_build.build_list(view_target, '80')
-        self.assertEqual(builds,
-                         [(str(n), '%s%s' % (job_dir, n), sta_result, fin_result)
-                          for n in range(79, 39, -1)])
+        self.assertEqual(
+            builds,
+            [
+                (str(n), f'{job_dir}{n}', sta_result, fin_result)
+                for n in range(79, 39, -1)
+            ],
+        )
 
     def test_view_build_list_with_latest(self):
         write('/buck/some-job/latest-build.txt', '119')
@@ -424,7 +439,7 @@ class BuildTest(main_test.TestBase):
 
     def test_build_list_handler(self):
         """Test that the job page shows a list of builds."""
-        response = app.get('/builds' + os.path.dirname(self.BUILD_DIR[:-1]))
+        response = app.get(f'/builds{os.path.dirname(self.BUILD_DIR[:-1])}')
         self.assertIn('/1234/">1234', response)
         self.assertIn('gcsweb', response)
 
@@ -436,8 +451,9 @@ class BuildTest(main_test.TestBase):
     def test_recent_runs_across_prs(self):
         """Test that "Recent Runs Across PRs" links are correct."""
         def expect(path, directory):
-            response = app.get('/builds/' + path)
-            self.assertIn('href="/builds/%s"' % directory, response)
+            response = app.get(f'/builds/{path}')
+            self.assertIn(f'href="/builds/{directory}"', response)
+
         # pull request job in main repo
         expect(
             'k-j/pr-logs/pull/514/pull-kubernetes-unit/',

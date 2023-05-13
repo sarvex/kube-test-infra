@@ -32,15 +32,12 @@ class TestCoalesce(unittest.TestCase):
     def make_result(self, name, error=''):
         pkg = os.path.join(self.tmpdir, name)
         os.makedirs(pkg)
-        if error:
-            inner = '<failure>something bad</failure>'
-        else:
-            inner = ''
+        inner = '<failure>something bad</failure>' if error else ''
         # Pass the encoding parameter to avoid ascii decode error for some
         # platform.
-        with open(pkg + '/test.log', 'w', encoding='utf-8') as fp:
+        with open(f'{pkg}/test.log', 'w', encoding='utf-8') as fp:
             fp.write(error)
-        with open(pkg + '/test.xml', 'w', encoding='utf-8') as fp:
+        with open(f'{pkg}/test.xml', 'w', encoding='utf-8') as fp:
             fp.write('''<?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
   <testsuite name="{name}" tests="1" failures="0" errors="0">

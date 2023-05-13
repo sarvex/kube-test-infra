@@ -39,8 +39,7 @@ def print_dump(file):
 
 def call(cmd):
     print('+', cmd)
-    status = os.system(cmd)
-    if status:
+    if status := os.system(cmd):
         raise OSError('invocation failed')
 
 

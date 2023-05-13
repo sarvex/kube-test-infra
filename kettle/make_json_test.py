@@ -32,9 +32,9 @@ class ValidateBuckets(unittest.TestCase):
             if name == 'gs://kubernetes-jenkins/logs/':
                 continue  # only bucket without a prefix
             prefix = options.get('prefix', '')
-            self.assertNotEqual(prefix, '', 'bucket %s must have a prefix' % name)
+            self.assertNotEqual(prefix, '', f'bucket {name} must have a prefix')
             self.assertNotIn(prefix, prefixes, "bucket %s prefix %r isn't unique" % (name, prefix))
-            self.assertEqual(prefix[-1], ':', "bucket %s prefix should be %s:" % (name, prefix))
+            self.assertEqual(prefix[-1], ':', f"bucket {name} prefix should be {prefix}:")
 
 
 class BuildObjectTests(unittest.TestCase):
@@ -151,7 +151,7 @@ class BuildObjectTests(unittest.TestCase):
             "tests_failed": 0,
             "job": "pr:pr-logs",
                 }
-        attrs.update(updates)
+        attrs |= updates
         build.populate_start(started)
         self.assertEqual(build.as_dict(), attrs)
 
@@ -231,7 +231,7 @@ class BuildObjectTests(unittest.TestCase):
                  "job": "pr:pr-logs",
                 }
         build.populate_finish(finished)
-        attrs.update(updates)
+        attrs |= updates
         self.assertEqual(build.as_dict(), attrs)
 
 
@@ -559,7 +559,7 @@ class MakeJsonTest(unittest.TestCase):
         junits = ['<testsuite><testcase name="t1" time="3.0"></testcase></testsuite>']
 
         def add_build(path, start, finish, result, junits):
-            path = 'gs://kubernetes-jenkins/logs/%s' % path
+            path = f'gs://kubernetes-jenkins/logs/{path}'
             self.db.insert_build(
                 path, {'timestamp': start}, {'timestamp': finish, 'result': result})
             # fake build rowid doesn't matter here

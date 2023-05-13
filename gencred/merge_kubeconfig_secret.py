@@ -37,7 +37,7 @@ import time
 reAutoKey = re.compile('^config-(\\d{8})$')
 
 def call(cmd, **kwargs):
-    print('>>> %s' % cmd)
+    print(f'>>> {cmd}')
     return subprocess.run(
         cmd,
         check=True,
@@ -64,38 +64,39 @@ def main(args):
             keys = call(cmd).stdout.rstrip(";").split(";")
             matches = [key for key in keys if reAutoKey.match(key)]
             matches.sort(reverse=True)
-            if len(matches) == 0:
-                raise ValueError('The %s/%s secret does not contain any keys matching the "config-20200730" format. Please try again with --src-key set to the most recent key. Existing keys: %s' % (args.namespace, args.name, keys)) #pylint: disable=line-too-long
+            if not matches:
+                raise ValueError(
+                    f'The {args.namespace}/{args.name} secret does not contain any keys matching the "config-20200730" format. Please try again with --src-key set to the most recent key. Existing keys: {keys}'
+                )
 
             args.src_key = matches[0]
         # Only enable pruning if we won't overwrite the source key.
         # This ensures that a second update on the same day will still have a
         # key to roll back to if needed.
         args.prune = args.src_key != args.dest_key
-        print('Automatic mode: --src-key=%s  --dest-key=%s' % (args.src_key, args.dest_key))
+        print(f'Automatic mode: --src-key={args.src_key}  --dest-key={args.dest_key}')
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        orig = '%s/original' % (tmpdir)
-        merged = '%s/merged' % (tmpdir)
+        orig = f'{tmpdir}/original'
+        merged = f'{tmpdir}/merged'
         # Copy the current secret contents into a temp file.
         cmd = 'kubectl --context="%s" get secret --namespace "%s" "%s" -o go-template="{{index .data \\"%s\\"}}" | base64 -d > %s' % (args.context, args.namespace, args.name, args.src_key, orig) #pylint: disable=line-too-long
         call(cmd)
 
         # Merge the existing and new kubeconfigs into another temp file.
         env = os.environ.copy()
-        env['KUBECONFIG'] = '%s:%s' % (orig, args.kubeconfig_to_merge)
-        call(
-            'kubectl config view --raw > %s' % (merged),
-            env=env,
-        )
+        env['KUBECONFIG'] = f'{orig}:{args.kubeconfig_to_merge}'
+        call(f'kubectl config view --raw > {merged}', env=env)
 
         # Update the secret with the merged config.
         if args.prune:
             # Pruning was request. Remove all keys except for dest and src (if different from dest).
             srcflag = ''
             if args.src_key != args.dest_key:
-                srcflag = '--from-file="%s=%s"' % (args.src_key, orig)
-            call('kubectl --context="%s" create secret generic --namespace "%s" "%s" --from-file="%s=%s" %s --dry-run -oyaml | kubectl --context="%s" replace -f -' % (args.context, args.namespace, args.name, args.dest_key, merged, srcflag, args.context)) #pylint: disable=line-too-long
+                srcflag = f'--from-file="{args.src_key}={orig}"'
+            call(
+                f'kubectl --context="{args.context}" create secret generic --namespace "{args.namespace}" "{args.name}" --from-file="{args.dest_key}={merged}" {srcflag} --dry-run -oyaml | kubectl --context="{args.context}" replace -f -'
+            )
         else:
             content = ''
             with open(merged, 'r') as mergedFile:
@@ -104,16 +105,17 @@ def main(args):
                 content = content.replace('\n', '\n' + yamlPad)
             call('kubectl --context="%s" patch --namespace "%s" "secret/%s" --patch "stringData:\n  %s: |\n%s\n"' % (args.context, args.namespace, args.name, args.dest_key, content)) #pylint: disable=line-too-long
 
-        print('Successfully updated secret "%s/%s". The new kubeconfig is under the key "%s".' % (args.namespace, args.name, args.dest_key)) #pylint: disable=line-too-long
+        print(
+            f'Successfully updated secret "{args.namespace}/{args.name}". The new kubeconfig is under the key "{args.dest_key}".'
+        )
         print('Don\'t forget to update any deployments or podspecs that use the secret to reference the updated key!') #pylint: disable=line-too-long
 
 def validateArgs(args):
     if args.auto:
         if args.dest_key:
             raise ValueError("--dest-key must be omitted when --auto is used.")
-    else:
-        if not args.src_key or not args.dest_key:
-            raise ValueError("--src-key and --dest-key are required unless --auto is used.")
+    elif not args.src_key or not args.dest_key:
+        raise ValueError("--src-key and --dest-key are required unless --auto is used.")
 
 
 if __name__ == '__main__':

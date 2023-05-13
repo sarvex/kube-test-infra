@@ -54,10 +54,10 @@ def init_build(build_dir, started=True, finished=True,
     finish_json = {'passed': True, 'result': 'SUCCESS', 'timestamp': 1406536800}
     (finish_json if finished_has_version else start_json)['revision'] = 'v1+56'
     if started:
-        write(build_dir + 'started.json', start_json)
+        write(f'{build_dir}started.json', start_json)
     if finished:
-        write(build_dir + 'finished.json', finish_json)
-    write(build_dir + 'artifacts/junit_01.xml', JUNIT_SUITE)
+        write(f'{build_dir}finished.json', finish_json)
+    write(f'{build_dir}artifacts/junit_01.xml', JUNIT_SUITE)
 
 
 
@@ -88,72 +88,87 @@ class AppTest(TestBase):
 
     def test_nodelog_missing_files(self):
         """Test that a missing all files gives a 404."""
-        build_dir = self.BUILD_DIR + 'nodelog?pod=abc'
-        response = app.get('/build' + build_dir, status=404)
+        build_dir = f'{self.BUILD_DIR}nodelog?pod=abc'
+        response = app.get(f'/build{build_dir}', status=404)
         self.assertIn('Unable to find', response)
 
     def test_nodelog_kubelet(self):
         """Test for a kubelet file with junit file.
          - missing the default kube-apiserver"""
-        nodelog_url = self.BUILD_DIR + 'nodelog?pod=abc&junit=junit_01.xml'
+        nodelog_url = f'{self.BUILD_DIR}nodelog?pod=abc&junit=junit_01.xml'
         init_build(self.BUILD_DIR)
-        write(self.BUILD_DIR + 'artifacts/tmp-node-image/junit_01.xml', JUNIT_SUITE)
-        write(self.BUILD_DIR + 'artifacts/tmp-node-image/kubelet.log',
-            'abc\nEvent(api.ObjectReference{Name:"abc", UID:"podabc"})\n')
-        response = app.get('/build' + nodelog_url)
+        write(f'{self.BUILD_DIR}artifacts/tmp-node-image/junit_01.xml', JUNIT_SUITE)
+        write(
+            f'{self.BUILD_DIR}artifacts/tmp-node-image/kubelet.log',
+            'abc\nEvent(api.ObjectReference{Name:"abc", UID:"podabc"})\n',
+        )
+        response = app.get(f'/build{nodelog_url}')
         self.assertIn("Wrap line", response)
 
     def test_nodelog_apiserver(self):
         """Test for default apiserver file
          - no kubelet file to find objrefdict
          - no file with junit file"""
-        nodelog_url = self.BUILD_DIR + 'nodelog?pod=abc&junit=junit_01.xml'
+        nodelog_url = f'{self.BUILD_DIR}nodelog?pod=abc&junit=junit_01.xml'
         init_build(self.BUILD_DIR)
-        write(self.BUILD_DIR + 'artifacts/tmp-node-image/junit_01.xml', JUNIT_SUITE)
-        write(self.BUILD_DIR + 'artifacts/tmp-node-image/kube-apiserver.log',
-            'apiserver pod abc\n')
-        response = app.get('/build' + nodelog_url)
+        write(f'{self.BUILD_DIR}artifacts/tmp-node-image/junit_01.xml', JUNIT_SUITE)
+        write(
+            f'{self.BUILD_DIR}artifacts/tmp-node-image/kube-apiserver.log',
+            'apiserver pod abc\n',
+        )
+        response = app.get(f'/build{nodelog_url}')
         self.assertIn("Wrap line", response)
 
     def test_nodelog_no_junit(self):
         """Test for when no junit in same folder
          - multiple folders"""
-        nodelog_url = self.BUILD_DIR + 'nodelog?pod=abc&junit=junit_01.xml'
+        nodelog_url = f'{self.BUILD_DIR}nodelog?pod=abc&junit=junit_01.xml'
         init_build(self.BUILD_DIR)
-        write(self.BUILD_DIR + 'artifacts/junit_01.xml', JUNIT_SUITE)
-        write(self.BUILD_DIR + 'artifacts/tmp-node-image/kube-apiserver.log',
-            'apiserver pod abc\n')
-        write(self.BUILD_DIR + 'artifacts/tmp-node-2/kube-apiserver.log',
-            'apiserver pod abc\n')
-        write(self.BUILD_DIR + 'artifacts/tmp-node-image/kubelet.log',
-            'abc\nEvent(api.ObjectReference{Name:"abc", UID:"podabc"})\n')
-        response = app.get('/build' + nodelog_url)
+        write(f'{self.BUILD_DIR}artifacts/junit_01.xml', JUNIT_SUITE)
+        write(
+            f'{self.BUILD_DIR}artifacts/tmp-node-image/kube-apiserver.log',
+            'apiserver pod abc\n',
+        )
+        write(
+            f'{self.BUILD_DIR}artifacts/tmp-node-2/kube-apiserver.log',
+            'apiserver pod abc\n',
+        )
+        write(
+            f'{self.BUILD_DIR}artifacts/tmp-node-image/kubelet.log',
+            'abc\nEvent(api.ObjectReference{Name:"abc", UID:"podabc"})\n',
+        )
+        response = app.get(f'/build{nodelog_url}')
         self.assertIn("tmp-node-2", response)
 
     def test_nodelog_no_junit_apiserver(self):
         """Test for when no junit in same folder
          - multiple folders
          - no kube-apiserver.log"""
-        nodelog_url = self.BUILD_DIR + 'nodelog?pod=abc&junit=junit_01.xml'
+        nodelog_url = f'{self.BUILD_DIR}nodelog?pod=abc&junit=junit_01.xml'
         init_build(self.BUILD_DIR)
-        write(self.BUILD_DIR + 'artifacts/junit_01.xml', JUNIT_SUITE)
-        write(self.BUILD_DIR + 'artifacts/tmp-node-image/docker.log',
-            'Containers\n')
-        write(self.BUILD_DIR + 'artifacts/tmp-node-2/kubelet.log',
-            'apiserver pod abc\n')
-        write(self.BUILD_DIR + 'artifacts/tmp-node-image/kubelet.log',
-            'abc\nEvent(api.ObjectReference{Name:"abc", UID:"podabc"})\n')
-        response = app.get('/build' + nodelog_url)
+        write(f'{self.BUILD_DIR}artifacts/junit_01.xml', JUNIT_SUITE)
+        write(f'{self.BUILD_DIR}artifacts/tmp-node-image/docker.log', 'Containers\n')
+        write(
+            f'{self.BUILD_DIR}artifacts/tmp-node-2/kubelet.log',
+            'apiserver pod abc\n',
+        )
+        write(
+            f'{self.BUILD_DIR}artifacts/tmp-node-image/kubelet.log',
+            'abc\nEvent(api.ObjectReference{Name:"abc", UID:"podabc"})\n',
+        )
+        response = app.get(f'/build{nodelog_url}')
         self.assertIn("tmp-node-2", response)
 
     def test_no_failed_pod(self):
         """Test that filtering page still loads when no failed pod name is given"""
-        nodelog_url = self.BUILD_DIR + 'nodelog?junit=junit_01.xml'
+        nodelog_url = f'{self.BUILD_DIR}nodelog?junit=junit_01.xml'
         init_build(self.BUILD_DIR)
-        write(self.BUILD_DIR + 'artifacts/tmp-node-image/junit_01.xml', JUNIT_SUITE)
-        write(self.BUILD_DIR + 'artifacts/tmp-node-image/kubelet.log',
-            'abc\nEvent(api.ObjectReference{Name:"abc", UID:"podabc"} failed)\n')
-        response = app.get('/build' + nodelog_url)
+        write(f'{self.BUILD_DIR}artifacts/tmp-node-image/junit_01.xml', JUNIT_SUITE)
+        write(
+            f'{self.BUILD_DIR}artifacts/tmp-node-image/kubelet.log',
+            'abc\nEvent(api.ObjectReference{Name:"abc", UID:"podabc"} failed)\n',
+        )
+        response = app.get(f'/build{nodelog_url}')
         self.assertIn("Wrap line", response)
 
     def test_parse_by_timestamp(self):
@@ -187,13 +202,12 @@ class AppTest(TestBase):
          - Check that lines without timestamp are combined
          - Test different timestamp formats
          - no kube-apiserver.log"""
-        kubelet_filepath = self.BUILD_DIR + 'artifacts/tmp-node-image/kubelet.log'
-        proxy_filepath = self.BUILD_DIR + 'artifacts/tmp-node-image/kube-proxy.log'
-        query_string = 'nodelog?pod=abc&junit=junit_01.xml&weave=on&logfiles=%s&logfiles=%s' % (
-            kubelet_filepath, proxy_filepath)
+        kubelet_filepath = f'{self.BUILD_DIR}artifacts/tmp-node-image/kubelet.log'
+        proxy_filepath = f'{self.BUILD_DIR}artifacts/tmp-node-image/kube-proxy.log'
+        query_string = f'nodelog?pod=abc&junit=junit_01.xml&weave=on&logfiles={kubelet_filepath}&logfiles={proxy_filepath}'
         nodelog_url = self.BUILD_DIR + query_string
         init_build(self.BUILD_DIR)
-        write(self.BUILD_DIR + 'artifacts/tmp-node-image/junit_01.xml', JUNIT_SUITE)
+        write(f'{self.BUILD_DIR}artifacts/tmp-node-image/junit_01.xml', JUNIT_SUITE)
         write(kubelet_filepath,
             'abc\n0101 01:01:01.001 Event(api.ObjectReference{Name:"abc", UID:"podabc"})\n')
         write(proxy_filepath,
@@ -203,5 +217,5 @@ class AppTest(TestBase):
                     '&#34;<span class="keyword">abc</span>&#34;, UID:&#34;podabc&#34;})</span>\n'
                     '0101 01:01:01.002 pod\n'
                     '01-01T01:01:01.005Z last line')
-        response = app.get('/build' + nodelog_url)
+        response = app.get(f'/build{nodelog_url}')
         self.assertIn(expected, response)

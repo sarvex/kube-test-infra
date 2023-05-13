@@ -18,6 +18,7 @@
 
 
 
+
 __all__ = ['CS_XML_NS',
            'CSFileStat',
            'dt_str_to_posix',
@@ -54,10 +55,10 @@ except ImportError:
 
 
 _GCS_BUCKET_REGEX_BASE = r'[a-z0-9\.\-_]{3,63}'
-_GCS_BUCKET_REGEX = re.compile(_GCS_BUCKET_REGEX_BASE + r'$')
-_GCS_BUCKET_PATH_REGEX = re.compile(r'/' + _GCS_BUCKET_REGEX_BASE + r'$')
-_GCS_PATH_PREFIX_REGEX = re.compile(r'/' + _GCS_BUCKET_REGEX_BASE + r'.*')
-_GCS_FULLPATH_REGEX = re.compile(r'/' + _GCS_BUCKET_REGEX_BASE + r'/.*')
+_GCS_BUCKET_REGEX = re.compile(f'{_GCS_BUCKET_REGEX_BASE}$')
+_GCS_BUCKET_PATH_REGEX = re.compile(f'/{_GCS_BUCKET_REGEX_BASE}$')
+_GCS_PATH_PREFIX_REGEX = re.compile(f'/{_GCS_BUCKET_REGEX_BASE}.*')
+_GCS_FULLPATH_REGEX = re.compile(f'/{_GCS_BUCKET_REGEX_BASE}/.*')
 _GCS_METADATA = ['x-goog-meta-',
                  'content-disposition',
                  'cache-control',
@@ -139,7 +140,7 @@ class GCSFileStat(object):
 
   def __repr__(self):
     if self.is_dir:
-      return '(directory: %s)' % self.filename
+      return f'(directory: {self.filename})'
 
     return (
         '(filename: %(filename)s, st_size: %(st_size)s, '
@@ -165,9 +166,7 @@ class GCSFileStat(object):
     return 0
 
   def __hash__(self):
-    if self.etag:
-      return hash(self.etag)
-    return hash(self.filename)
+    return hash(self.etag) if self.etag else hash(self.filename)
 
 
 CSFileStat = GCSFileStat
@@ -194,8 +193,11 @@ def get_stored_content_length(headers):
 
 def get_metadata(headers):
   """Get user defined options from HTTP response headers."""
-  return dict((k, v) for k, v in headers.iteritems()
-              if any(k.lower().startswith(valid) for valid in _GCS_METADATA))
+  return {
+      k: v
+      for k, v in headers.iteritems()
+      if any(k.lower().startswith(valid) for valid in _GCS_METADATA)
+  }
 
 
 def validate_bucket_name(name):
@@ -258,11 +260,12 @@ def _process_path_prefix(path_prefix):
   """
   _validate_path(path_prefix)
   if not _GCS_PATH_PREFIX_REGEX.match(path_prefix):
-    raise ValueError('Path prefix should have format /bucket, /bucket/, '
-                     'or /bucket/prefix but got %s.' % path_prefix)
+    raise ValueError(
+        f'Path prefix should have format /bucket, /bucket/, or /bucket/prefix but got {path_prefix}.'
+    )
   bucket_name_end = path_prefix.find('/', 1)
-  bucket = path_prefix
   prefix = None
+  bucket = path_prefix
   if bucket_name_end != -1:
     bucket = path_prefix[:bucket_name_end]
     prefix = path_prefix[bucket_name_end + 1:] or None
@@ -283,8 +286,7 @@ def _validate_path(path):
   if not path:
     raise ValueError('Path is empty')
   if not isinstance(path, basestring):
-    raise TypeError('Path should be a string but is %s (%s).' %
-                    (path.__class__, path))
+    raise TypeError(f'Path should be a string but is {path.__class__} ({path}).')
 
 
 def validate_options(options):
@@ -305,7 +307,7 @@ def validate_options(options):
     if not isinstance(k, str):
       raise TypeError('option %r should be a str.' % k)
     if not any(k.lower().startswith(valid) for valid in _GCS_OPTIONS):
-      raise ValueError('option %s is not supported.' % k)
+      raise ValueError(f'option {k} is not supported.')
     if not isinstance(v, basestring):
       raise TypeError('value %r for option %s should be of type basestring.' %
                       (v, k))
@@ -381,7 +383,7 @@ def posix_to_dt_str(posix):
   """
   dt = datetime.datetime.utcfromtimestamp(posix)
   dt_str = dt.strftime(_DT_FORMAT)
-  return dt_str + '.000Z'
+  return f'{dt_str}.000Z'
 
 
 def local_run():
@@ -391,14 +393,12 @@ def local_run():
     return True
   if 'remote_api' in server_software:
     return False
-  if server_software.startswith(('Development', 'testutil')):
-    return True
-  return False
+  return bool(server_software.startswith(('Development', 'testutil')))
 
 
 def local_api_url():
   """Return URL for GCS emulation on dev appserver."""
-  return 'http://%s%s' % (os.environ.get('HTTP_HOST'), LOCAL_GCS_ENDPOINT)
+  return f"http://{os.environ.get('HTTP_HOST')}{LOCAL_GCS_ENDPOINT}"
 
 
 def memory_usage(method):

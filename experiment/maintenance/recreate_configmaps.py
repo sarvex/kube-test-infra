@@ -35,7 +35,7 @@ import subprocess
 
 def recreate_prow_config(wet, configmap_name, path):
     print('recreating prow config:')
-    real_cmd = ['/bin/sh', '-c', 'gzip -k '+path]
+    real_cmd = ['/bin/sh', '-c', f'gzip -k {path}']
     print(real_cmd)
     if wet:
         subprocess.check_call(real_cmd)
@@ -48,7 +48,7 @@ def recreate_prow_config(wet, configmap_name, path):
     print(real_cmd)
     if wet:
         subprocess.check_call(real_cmd)
-    real_cmd = ['/bin/sh', '-c', 'rm '+path+'.gz']
+    real_cmd = ['/bin/sh', '-c', f'rm {path}.gz']
     print(real_cmd)
     if wet:
         subprocess.check_call(real_cmd)
@@ -68,7 +68,6 @@ def recreate_plugins_config(wet, configmap_name, path):
 
 def recreate_job_config(wet, job_configmap, job_config_dir):
     print('recreating jobs config:')
-     # delete configmap (apply has size limit)
     cmd = ["kubectl", "delete", "configmap", job_configmap]
     print(cmd)
     if wet:
@@ -79,7 +78,7 @@ def recreate_job_config(wet, job_configmap, job_config_dir):
     for root, _, files in os.walk(job_config_dir):
         for name in files:
             if name.endswith(".yaml"):
-                cmd.append("--from-file=%s=%s" % (name, os.path.join(root, name)))
+                cmd.append(f"--from-file={name}={os.path.join(root, name)}")
     print(cmd)
     if wet:
         subprocess.check_call(cmd)
@@ -109,15 +108,15 @@ def main():
 
     # debug the current context
     out = subprocess.check_output(['kubectl', 'config', 'current-context'], encoding='utf-8')
-    print('Current KUBECONFIG context: '+out)
+    print(f'Current KUBECONFIG context: {out}')
 
     # require additional confirmation in --wet mode
     prompt = '!'*65 + (
         "\n!!     WARNING THIS WILL RECREATE **ALL** PROW CONFIGMAPS.     !!"
         "\n!!    ARE YOU SURE YOU WANT TO DO THIS? IF SO, ENTER 'YES'.    !! "
     ) + '\n' + '!'*65 + '\n\n: '
-    if args.wet:
-        if input(prompt) != "YES":
+    if input(prompt) != "YES":
+        if args.wet:
             print("you did not enter 'YES'")
             sys.exit(-1)
 

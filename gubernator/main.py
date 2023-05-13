@@ -47,7 +47,7 @@ config = {
     'github_client': None,  # filled in the first time auth is needed
 }
 
-config.update(get_app_config())
+config |= get_app_config()
 
 class Warmup(webapp2.RequestHandler):
     """Warms up gubernator."""
@@ -81,15 +81,13 @@ class ConfigHandler(view_base.BaseHandler):
             if self.request.get('github_client_host'):
                 # enable custom domains pointed at the same app to have their
                 # own github oauth config.
-                github_client_key = 'github_client_%s' % \
-                    self.request.get('github_client_host')
+                github_client_key = f"github_client_{self.request.get('github_client_host')}"
             if github_id and github_secret:
                 value = {'id': github_id, 'secret': github_secret}
                 secrets.put(github_client_key, value)
                 app.config[github_client_key] = value
                 oauth_set = True
-            github_webhook_secret = self.request.get('github_webhook_secret')
-            if github_webhook_secret:
+            if github_webhook_secret := self.request.get('github_webhook_secret'):
                 secrets.put('github_webhook_secret',
                             github_webhook_secret,
                             per_host=False)

@@ -57,17 +57,17 @@ def result(pkg):
     elem = ET.Element('testcase')
     elem.set('classname', 'go_test')
     pkg_parts = pkg.split('/')
-    elem.set('name', '//%s:%s' % ('/'.join(pkg_parts[1:-1]), pkg_parts[-1]))
+    elem.set('name', f"//{'/'.join(pkg_parts[1:-1])}:{pkg_parts[-1]}")
     elem.set('time', '0')
-    suites = ET.parse(pkg + '/test.xml').getroot()
+    suites = ET.parse(f'{pkg}/test.xml').getroot()
     for suite in suites:
         for case in suite:
             for status in case:
-                if status.tag == 'error' or status.tag == 'failure':
+                if status.tag in ['error', 'failure']:
                     failure = ET.Element('failure')
                     # Pass the encoding parameter to avoid ascii decode error
                     # for some platform.
-                    with open(pkg + '/test.log', encoding='utf-8') as fp:
+                    with open(f'{pkg}/test.log', encoding='utf-8') as fp:
                         text = fp.read()
                         failure.text = sanitize(text)
                     elem.append(failure)

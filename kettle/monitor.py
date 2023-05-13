@@ -62,7 +62,7 @@ def collect(tables, stale_hours):
             stale = True
         print(json.dumps(fields))
 
-    print(f'Finished checking tables')
+    print('Finished checking tables')
 
     return int(stale)
 

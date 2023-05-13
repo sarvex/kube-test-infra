@@ -60,7 +60,7 @@ def main():
     pods_by_job = get_pods_by_job(args.show_all)
     jobs = sorted(pods_by_job.keys())
     for job in jobs:
-        print(job+":", pods_by_job[job])
+        print(f"{job}:", pods_by_job[job])
 
 if __name__ == '__main__':
     main()

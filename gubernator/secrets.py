@@ -26,7 +26,7 @@ def get_hostname():
     if 'testbed' not in os.environ.get('SERVER_SOFTWARE', 'testbed'):
         current_version = modules.modules.get_current_version_name()
         if current_version and modules.modules.get_default_version() != current_version:
-            hostname = '%s-dot-%s' % (current_version, hostname)
+            hostname = f'{current_version}-dot-{hostname}'
     return hostname
 
 class Secret(ndb.Model):
@@ -44,10 +44,10 @@ class Secret(ndb.Model):
 
 
 def get(key, per_host=True):
-    data = Secret.make_key(key, per_host).get()
-    if not data:
+    if data := Secret.make_key(key, per_host).get():
+        return data.value
+    else:
         raise KeyError
-    return data.value
 
 
 def put(key, value, per_host=True):

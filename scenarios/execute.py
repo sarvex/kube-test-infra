@@ -34,7 +34,7 @@ def main(envs, cmd):
     """Run script and verify it exits 0."""
     for env in envs:
         key, val = env.split('=', 1)
-        print('%s=%s' % (key, val), file=sys.stderr)
+        print(f'{key}={val}', file=sys.stderr)
         os.environ[key] = val
     if not cmd:
         raise ValueError(cmd)

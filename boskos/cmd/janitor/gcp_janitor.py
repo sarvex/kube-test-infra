@@ -76,7 +76,7 @@ DEMOLISH_ORDER = [
 def log(message):
     """ print a message if --verbose is set. """
     if ARGS.verbose:
-        tss = "[" + str(datetime.datetime.now()) + "] "
+        tss = f"[{str(datetime.datetime.now())}] "
         print(tss + message + '\n')
 
 
@@ -160,11 +160,14 @@ def collect(project, age, resource, filt, clear_all):
         return col
 
     cmd = base_command(resource)
-    cmd.extend([
-        'list',
-        '--format=json(name,creationTimestamp.date(tz=UTC),zone,region,isManaged)',
-        '--filter=%s' % filt,
-        '--project=%s' % project])
+    cmd.extend(
+        [
+            'list',
+            '--format=json(name,creationTimestamp.date(tz=UTC),zone,region,isManaged)',
+            f'--filter={filt}',
+            f'--project={project}',
+        ]
+    )
     if resource.condition == 'zone' and resource.name != 'sole-tenancy' and resource.name != 'network-endpoint-groups':
         cmd.append('--zones=asia-east1-a,asia-east1-b,asia-east1-c,asia-east2-a,asia-east2-b,asia-east2-c,' +
             'asia-northeast1-a,asia-northeast1-b,asia-northeast1-c,asia-northeast2-a,asia-northeast2-b,asia-northeast2-c,' +
@@ -197,21 +200,21 @@ def collect(project, age, resource, filt, clear_all):
         if resource.condition is not None:
             # This subcommand will want either a --global, --region, or --zone
             # flag, so segment items accordingly.
-            if resource.condition == 'global':
-                if 'zone' in item or 'region' in item:
-                    # This item is zonal or regional, so don't include it in
-                    # the global list.
-                    continue
-            elif resource.condition in item:
+            if (
+                resource.condition == 'global'
+                and ('zone' in item or 'region' in item)
+                or resource.condition != 'global'
+                and resource.condition not in item
+            ):
+                # This item is zonal or regional, so don't include it in
+                # the global list.
+                continue
+            elif resource.condition != 'global':
                 # Looking for zonal or regional items, and this matches.
                 # The zone or region is sometimes a full URL (why?), but
                 # subcommands want just the name, not the full URL, so strip it.
                 colname = item[resource.condition].rsplit('/', 1)[-1]
-                log('looking for items in %s=%s' % (resource.condition, colname))
-            else:
-                # This item doesn't match the condition, so don't include it.
-                continue
-
+                log(f'looking for items in {resource.condition}={colname}')
         if validate_item(item, age, resource, clear_all):
             col[colname].append(item['name'])
     return col
@@ -245,7 +248,7 @@ def clear_resources(project, cols, resource, rate_limit):
         > 0 if deletion command fails
     """
     errs = []
-    threads = list()
+    threads = []
     lock = threading.Lock()
 
     # delete one resource at a time, if there's no api support
@@ -254,18 +257,18 @@ def clear_resources(project, cols, resource, rate_limit):
         rate_limit = 1
 
     for col, items in list(cols.items()):
-        manage_key = {'Yes': 'managed', 'No': 'unmanaged'}
-
         # construct the customized gcloud command
         base = base_command(resource)
         if resource.managed:
+            manage_key = {'Yes': 'managed', 'No': 'unmanaged'}
+
             base.append(manage_key[resource.managed])
         base.append('delete')
-        base.append('--project=%s' % project)
+        base.append(f'--project={project}')
 
         condition = None
         if resource.condition and col:
-            condition = '--%s=%s' % (resource.condition, col)
+            condition = f'--{resource.condition}={col}'
         elif resource.condition == 'global':
             condition = '--global'
 
@@ -302,18 +305,22 @@ def clean_gke_cluster(project, age, filt):
     errs = []
 
     for endpoint in endpoints:
-        threads = list()
+        threads = []
         lock = threading.Lock()
 
         os.environ['CLOUDSDK_API_ENDPOINT_OVERRIDES_CONTAINER'] = endpoint
-        log("checking endpoint %s" % endpoint)
+        log(f"checking endpoint {endpoint}")
         cmd = [
-            'gcloud', 'container', '-q', 'clusters', 'list',
-            '--project=%s' % project,
-            '--filter=%s' % filt,
-            '--format=json(name,createTime,region,zone)'
+            'gcloud',
+            'container',
+            '-q',
+            'clusters',
+            'list',
+            f'--project={project}',
+            f'--filter={filt}',
+            '--format=json(name,createTime,region,zone)',
         ]
-        log('running %s' % cmd)
+        log(f'running {cmd}')
 
         output = ''
         try:
@@ -327,7 +334,7 @@ def clean_gke_cluster(project, age, filt):
             log('cluster info: %r' % item)
             if 'name' not in item or 'createTime' not in item:
                 raise ValueError('name and createTime must be present: %r' % item)
-            if not ('zone' in item or 'region' in item):
+            if 'zone' not in item and 'region' not in item:
                 raise ValueError('either zone or region must be present: %r' % item)
 
             # The raw createTime string looks like 2017-08-30T18:33:14+00:00
@@ -341,14 +348,18 @@ def clean_gke_cluster(project, age, filt):
                 log('Found stale gke cluster %r in %r, created time = %r' %
                     (item['name'], endpoint, item['createTime']))
                 delete = [
-                    'gcloud', 'container', '-q', 'clusters', 'delete',
+                    'gcloud',
+                    'container',
+                    '-q',
+                    'clusters',
+                    'delete',
                     item['name'],
-                    '--project=%s' % project,
+                    f'--project={project}',
                 ]
                 if 'zone' in item:
-                    delete.append('--zone=%s' % item['zone'])
+                    delete.append(f"--zone={item['zone']}")
                 elif 'region' in item:
-                    delete.append('--region=%s' % item['region'])
+                    delete.append(f"--region={item['region']}")
                 thread = threading.Thread(
                     target=asyncCall, args=(delete, False, item['name'], errs, lock, True))
                 threads.append(thread)
@@ -363,17 +374,22 @@ def clean_gke_cluster(project, age, filt):
 
 
 def activate_service_account(service_account):
-    print('[=== Activating service_account %s ===]' % service_account)
+    print(f'[=== Activating service_account {service_account} ===]')
     cmd = [
-        'gcloud', 'auth', 'activate-service-account',
-        '--key-file=%s' % service_account,
+        'gcloud',
+        'auth',
+        'activate-service-account',
+        f'--key-file={service_account}',
     ]
-    log('running %s' % cmd)
+    log(f'running {cmd}')
 
     try:
         subprocess.check_call(cmd)
     except subprocess.CalledProcessError:
-        print('Error try to activate service_account: %s' % service_account, file=sys.stderr)
+        print(
+            f'Error try to activate service_account: {service_account}',
+            file=sys.stderr,
+        )
         return 1
     return 0
 
@@ -414,8 +430,7 @@ def main(project, days, hours, filt, rate_limit, service_account):
         log('Try to search for %r with condition %r, managed %r' % (
             res.name, res.condition, res.managed))
         try:
-            col = collect(project, age, res, filt, clear_all)
-            if col:
+            if col := collect(project, age, res, filt, clear_all):
                 err |= clear_resources(project, col, res, rate_limit)
         except (subprocess.CalledProcessError, ValueError):
             err |= 1  # keep clean the other resource

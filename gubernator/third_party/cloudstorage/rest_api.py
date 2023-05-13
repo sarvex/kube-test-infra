@@ -204,7 +204,7 @@ class _RestApi(object):
     Yields:
       An authentication token. This token is guaranteed to be non-expired.
     """
-    key = '%s,%s' % (self.service_account_id, ','.join(self.scopes))
+    key = f"{self.service_account_id},{','.join(self.scopes)}"
     ts = yield _AE_TokenStorage_.get_by_id_async(
         key, use_cache=True, use_memcache=True,
         use_datastore=self.retry_params.save_access_token)

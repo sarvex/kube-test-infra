@@ -57,11 +57,11 @@ def pr_builds(path):
 
 def pr_path(org, repo, pr, default_org, default_repo, pull_prefix):
     """Builds the correct gs://prefix/maybe_kubernetes/maybe_repo_org/pr."""
-    if org == default_org and repo == default_repo:
-        return '%s/%s' % (pull_prefix, pr)
     if org == default_org:
-        return '%s/%s/%s' % (pull_prefix, repo, pr)
-    return '%s/%s_%s/%s' % (pull_prefix, org, repo, pr)
+        if repo == default_repo:
+            return f'{pull_prefix}/{pr}'
+        return f'{pull_prefix}/{repo}/{pr}'
+    return f'{pull_prefix}/{org}_{repo}/{pr}'
 
 
 def org_repo(path, default_org, default_repo):
@@ -130,13 +130,10 @@ class PRHandler(view_base.BaseHandler):
 
 def get_acks(login, prs):
     acks = {}
-    result = ghm.GHUserState.make_key(login).get()
-    if result:
+    if result := ghm.GHUserState.make_key(login).get():
         acks = result.acks
         if prs:
-            # clear acks for PRs that user is no longer involved in.
-            stale = set(acks) - set(pr.key.id() for pr in prs)
-            if stale:
+            if stale := set(acks) - {pr.key.id() for pr in prs}:
                 for key in stale:
                     result.acks.pop(key)
                 result.put()
@@ -201,6 +198,7 @@ class PRDashboard(view_base.BaseHandler):
                     if acks is None:
                         return False
                     return filters.do_get_latest(p.payload, user) <= acks.get(p.key.id(), 0)
+
                 def needs_attention(p):
                     labels = p.payload.get('labels', {})
                     for u, reason in p.payload['attn'].iteritems():
@@ -211,16 +209,26 @@ class PRDashboard(view_base.BaseHandler):
                                 continue  # hide PRs that need approval but haven't been LGTMed yet
                             return True
                     return False
+
                 cats = [
                     ('Needs Attention', needs_attention, ''),
-                    ('Approvable', lambda p: user in p.payload.get('approvers', []),
-                     'is:open is:pr ("additional approvers: {0}" ' +
-                     'OR "additional approver: {0}")'.format(user)),
-                    ('Incoming', lambda p: user != p.payload['author'] and
-                                           user in p.payload['assignees'],
-                     'is:open is:pr user:kubernetes assignee:%s' % user),
-                    ('Outgoing', lambda p: user == p.payload['author'],
-                     'is:open is:pr user:kubernetes author:%s' % user),
+                    (
+                        'Approvable',
+                        lambda p: user in p.payload.get('approvers', []),
+                        'is:open is:pr ("additional approvers: {0}" '
+                        + 'OR "additional approver: {0}")'.format(user),
+                    ),
+                    (
+                        'Incoming',
+                        lambda p: user != p.payload['author']
+                        and user in p.payload['assignees'],
+                        f'is:open is:pr user:kubernetes assignee:{user}',
+                    ),
+                    (
+                        'Outgoing',
+                        lambda p: user == p.payload['author'],
+                        f'is:open is:pr user:kubernetes author:{user}',
+                    ),
                 ]
             else:
                 cats = [('Open Kubernetes PRs', lambda x: True,
@@ -246,7 +254,7 @@ class PRDashboard(view_base.BaseHandler):
             state = ghm.GHUserState.make(login)
         body = json.loads(self.request.body)
         if body['command'] == 'ack':
-            delta = {'%s %s' % (body['repo'], body['number']): body['latest']}
+            delta = {f"{body['repo']} {body['number']}": body['latest']}
             state.acks.update(delta)
             state.put()
         elif body['command'] == 'ack-clear':
@@ -262,6 +270,6 @@ class PRBuildLogHandler(view_base.BaseHandler):
             default_org=self.app.config['default_org'],
             default_repo=self.app.config['default_repo'],
         )
-        self.redirect('https://storage.googleapis.com/%s/%s' % (
-            get_pull_prefix(self.app.config, org), path
-        ))
+        self.redirect(
+            f'https://storage.googleapis.com/{get_pull_prefix(self.app.config, org)}/{path}'
+        )

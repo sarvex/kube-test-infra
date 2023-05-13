@@ -53,11 +53,21 @@ def get_pool_sizes(project, zone, cluster):
             group_to_pool[instance_group] = pool['name']
 
     # map instance groups to node counts
-    groups = json.loads(subprocess.check_output([
-        'gcloud', 'compute', 'instance-groups', 'list',
-        '--project', project, '--filter=zone:({})'.format(zone),
-        '--format=json',
-    ], encoding='utf-8'))
+    groups = json.loads(
+        subprocess.check_output(
+            [
+                'gcloud',
+                'compute',
+                'instance-groups',
+                'list',
+                '--project',
+                project,
+                f'--filter=zone:({zone})',
+                '--format=json',
+            ],
+            encoding='utf-8',
+        )
+    )
     for group in groups:
         if group['name'] not in group_to_pool:
             continue
@@ -128,9 +138,7 @@ def main(options):
 
     n_iter = int(math.ceil(float(nodes_to_add) / grow_increment))
     pool_to_shrink_target = pool_to_shrink_initial - n_iter*shrink_increment
-    if pool_to_shrink_target < 0:
-        pool_to_shrink_target = 0
-
+    pool_to_shrink_target = max(pool_to_shrink_target, 0)
     # verify with the user
     print((
         'Shifting NodePool capacity for project = "{project}",'

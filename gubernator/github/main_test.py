@@ -74,7 +74,7 @@ class AppTest(TestBase):
 
     def test_webhook_bad_sig(self):
         body = json.dumps({'action': 'blah'})
-        signature = handlers.make_signature(body + 'foo')
+        signature = handlers.make_signature(f'{body}foo')
         app.post('/webhook', body,
             {'X-Github-Event': 'test',
              'X-Hub-Signature': signature}, status=400)

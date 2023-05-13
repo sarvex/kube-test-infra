@@ -36,7 +36,7 @@ def check(cmd, **kwargs):
     """Logs and runs the command, raising on errors."""
     print('Run:', ' '.join(pipes.quote(c) for c in cmd), end=' ', file=sys.stderr)
     if hasattr(kwargs.get('stdout'), 'name'):
-        print(' > %s' % kwargs['stdout'].name, file=sys.stderr)
+        print(f" > {kwargs['stdout'].name}", file=sys.stderr)
     else:
         print()
     # If 'stdin' keyword arg is a string run command and communicate string to stdin
@@ -76,9 +76,11 @@ class BigQuerier:
     def do_query(self, query, out_filename):
         """Executes a bigquery query, outputting the results to a file."""
         cmd = [
-            'bq', 'query', '--format=prettyjson',
-            '--project_id=%s' % self.project,
-            '--max_rows=1000000',  # Results may have more than 100 rows
+            'bq',
+            'query',
+            '--format=prettyjson',
+            f'--project_id={self.project}',
+            '--max_rows=1000000',
             query,
         ]
         with open(out_filename, 'w') as out_file:
@@ -87,8 +89,8 @@ class BigQuerier:
 
     def jq_upload(self, config, data_filename):
         """Filters a data file with jq and uploads the results to GCS."""
-        filtered = 'daily-%s.json' % time.strftime('%Y-%m-%d')
-        latest = '%s-latest.json' % config['metric']
+        filtered = f"daily-{time.strftime('%Y-%m-%d')}.json"
+        latest = f"{config['metric']}-latest.json"
         do_jq(config['jqfilter'], data_filename, filtered)
 
         self.copy(filtered, os.path.join(config['metric'], filtered))
@@ -96,7 +98,7 @@ class BigQuerier:
 
     def run_metric(self, config):
         """Runs query and filters results, uploading data to GCS."""
-        raw = 'raw-%s.json' % time.strftime('%Y-%m-%d')
+        raw = f"raw-{time.strftime('%Y-%m-%d')}.json"
 
         self.update_query(config)
         self.do_query(config['query'], raw)
@@ -168,7 +170,7 @@ def main(configs, project, bucket_path):
             with open(path) as config_raw:
                 config = yaml.safe_load(config_raw)
             if not config:
-                raise ValueError('invalid yaml: %s.' % path)
+                raise ValueError(f'invalid yaml: {path}.')
             config['metric'] = config['metric'].strip()
             validate_metric_name(config['metric'])
             queryer.run_metric(config)

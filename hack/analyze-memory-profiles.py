@@ -34,7 +34,7 @@ from matplotlib.font_manager import FontProperties
 
 if len(sys.argv) != 2:
     print("[ERROR] Expected the directory containing profiles as the only argument.")
-    print("Usage: {} ./path/to/profiles/".format(sys.argv[0]))
+    print(f"Usage: {sys.argv[0]} ./path/to/profiles/")
     sys.exit(1)
 
 profile_dir = sys.argv[1]
@@ -86,11 +86,14 @@ for subdir, dirs, files in os.walk(profile_dir):
         usage = parse_bytes(lines[3].split()[-2])
         if usage > max_usage:
             max_usage = usage
-        data_index = 0
-        for i in range(len(lines)):
-            if lines[i].split()[0].decode("utf-8") == "flat":
-                data_index = i + 1
-                break
+        data_index = next(
+            (
+                i + 1
+                for i in range(len(lines))
+                if lines[i].split()[0].decode("utf-8") == "flat"
+            ),
+            0,
+        )
         flat_overall = 0
         cumulative_overall = 0
         for line in lines[data_index:]:

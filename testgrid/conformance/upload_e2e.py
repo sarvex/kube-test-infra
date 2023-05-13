@@ -82,7 +82,7 @@ def parse_e2e_log_line_timestamp(line, year):
         return None
     # note we add year to the timestamp because the actual timestamp doesn't
     # contain one and we want a datetime object...
-    timestamp = year+' '+match.group(1)
+    timestamp = f'{year} {match.group(1)}'
     return datetime.datetime.strptime(timestamp, '%Y %b %d %H:%M:%S.%f')
 
 
@@ -99,10 +99,7 @@ def parse_e2e_logfile(file_handle, year):
     passed = started = finished = None
     for line in file_handle:
         line = log_line_strip_escape_sequences(line)
-        # try to get a timestamp from each line, keep the first one as
-        # start time, and the last one as finish time
-        timestamp = parse_e2e_log_line_timestamp(line, year)
-        if timestamp:
+        if timestamp := parse_e2e_log_line_timestamp(line, year):
             if started:
                 finished = timestamp
             else:
@@ -166,7 +163,7 @@ def testgrid_finished_json_contents(finish_time, passed, metadata):
 def upload_string(gcs_path, text, dry):
     """Uploads text to gcs_path if dry is False, otherwise just prints"""
     cmd = ['gsutil', '-q', '-h', 'Content-Type:text/plain', 'cp', '-', gcs_path]
-    print('Run:', cmd, 'stdin=%s' % text, file=sys.stderr)
+    print('Run:', cmd, f'stdin={text}', file=sys.stderr)
     if dry:
         return
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, encoding='utf8')
@@ -204,14 +201,12 @@ def set_current_account(account, dry_run):
     """sets the currently active gcp account by shelling out to gcloud"""
     cmd = ['gcloud', 'config', 'set', 'core/account', account]
     print('Run:', cmd, file=sys.stderr)
-    if dry_run:
-        return None
-    return subprocess.check_call(cmd)
+    return None if dry_run else subprocess.check_call(cmd)
 
 
 def activate_service_account(key_file, dry_run):
     """activates a gcp service account by shelling out to gcloud"""
-    cmd = ['gcloud', 'auth', 'activate-service-account', '--key-file='+key_file]
+    cmd = ['gcloud', 'auth', 'activate-service-account', f'--key-file={key_file}']
     print('Run:', cmd, file=sys.stderr)
     if dry_run:
         return
@@ -222,9 +217,7 @@ def revoke_current_account(dry_run):
     """logs out of the currently active gcp account by shelling out to gcloud"""
     cmd = ['gcloud', 'auth', 'revoke']
     print('Run:', cmd, file=sys.stderr)
-    if dry_run:
-        return None
-    return subprocess.check_call(cmd)
+    return None if dry_run else subprocess.check_call(cmd)
 
 
 def parse_args(cli_args=None):
@@ -280,10 +273,7 @@ def main(cli_args):
 
     # optionally activate a service account with upload credentials
     if args.key_file:
-        # grab the currently active account if any, and if there is one
-        # register a handler to set it active again on exit
-        current_account = get_current_account(args.dry_run)
-        if current_account:
+        if current_account := get_current_account(args.dry_run):
             atexit.register(
                 lambda: set_current_account(current_account, args.dry_run)
             )
@@ -309,16 +299,19 @@ def main(cli_args):
         finished, passed, args.metadata)
 
     # use timestamp as build ID
-    gcs_dir = args.bucket + '/' + str(datetime_to_unix(started))
+    gcs_dir = f'{args.bucket}/{str(datetime_to_unix(started))}'
 
     # upload metadata, log, junit to testgrid
-    print('Uploading entry to: %s' % gcs_dir)
-    upload_string(gcs_dir+'/started.json', started_json, args.dry_run)
-    upload_string(gcs_dir+'/finished.json', finished_json, args.dry_run)
-    upload_file(gcs_dir+'/build-log.txt', args.log, args.dry_run)
+    print(f'Uploading entry to: {gcs_dir}')
+    upload_string(f'{gcs_dir}/started.json', started_json, args.dry_run)
+    upload_string(f'{gcs_dir}/finished.json', finished_json, args.dry_run)
+    upload_file(f'{gcs_dir}/build-log.txt', args.log, args.dry_run)
     for junit_file in junits:
-        upload_file(gcs_dir+'/artifacts/' +
-                    path.basename(junit_file), junit_file, args.dry_run)
+        upload_file(
+            f'{gcs_dir}/artifacts/{path.basename(junit_file)}',
+            junit_file,
+            args.dry_run,
+        )
     print('Done.')
 
 

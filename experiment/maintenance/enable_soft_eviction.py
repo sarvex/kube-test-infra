@@ -31,18 +31,16 @@ CLUSTER = 'prow'
 ZONE = 'us-central1-f'
 PROJECT = 'k8s-prow-builds'
 
-AUTH_TO_CLUSTER_COMMAND = 'gcloud container clusters get-credentials %s --project=%s --zone=%s' % (CLUSTER, PROJECT, ZONE)
+AUTH_TO_CLUSTER_COMMAND = f'gcloud container clusters get-credentials {CLUSTER} --project={PROJECT} --zone={ZONE}'
 
 # this should be 20% more than the hard eviction threshold
 # the grace period should be longer than the typical time for another pod to be cleaned up by sinker
 KUBELET_ARGS_TO_ADD = '--eviction-soft=nodefs.available<30% --eviction-soft-grace-period=nodefs.available=2h'
 # commands used *in order* to update the kubelet
 KUBELET_UPDATE_COMMANDS = [
-    # this works because the ExecStart line normally ends with $KUBELET_OPTS
-    # so we replace `KUBELET_OPTS.*` (to the end of the line) with `KUBELET_OPTS --some --args ---we --want`
-    "sudo sed -i 's/KUBELET_OPTS.*/KUBELET_OPTS %s/' /etc/systemd/system/kubelet.service" % KUBELET_ARGS_TO_ADD,
+    f"sudo sed -i 's/KUBELET_OPTS.*/KUBELET_OPTS {KUBELET_ARGS_TO_ADD}/' /etc/systemd/system/kubelet.service",
     "sudo systemctl daemon-reload",
-    "sudo systemctl restart kubelet"
+    "sudo systemctl restart kubelet",
 ]
 
 def get_nodes():
@@ -57,8 +55,18 @@ def get_nodes():
 
 
 def run_on_node(node_name, command):
-    print("node: %s running: %s" % (node_name, command))
-    subprocess.call(['gcloud', 'compute', 'ssh', '--project='+PROJECT, '--zone='+ZONE, '--command='+command, node_name])
+    print(f"node: {node_name} running: {command}")
+    subprocess.call(
+        [
+            'gcloud',
+            'compute',
+            'ssh',
+            f'--project={PROJECT}',
+            f'--zone={ZONE}',
+            f'--command={command}',
+            node_name,
+        ]
+    )
 
 def main():
     if sys.argv[-1] != "--yes-i-accept-that-this-is-very-risky":

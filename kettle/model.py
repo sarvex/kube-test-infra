@@ -116,7 +116,9 @@ class Database:
         """
         Create tables necessary for storing incremental emission state.
         """
-        self.db.execute('create table if not exists %s(build_id integer primary key, gen)' % table)
+        self.db.execute(
+            f'create table if not exists {table}(build_id integer primary key, gen)'
+        )
 
     @staticmethod
     def _get_builds(results):
@@ -142,10 +144,11 @@ class Database:
         results = self.db.execute(
             'select rowid, gcs_path, started_json, finished_json from build '
             'where gcs_path like ?'
-            ' and finished_time >= ?' +
-            ' and rowid not in (select build_id from %s)'
-            ' order by finished_time' % incremental_table
-            , (path + '%', min_started)).fetchall()
+            ' and finished_time >= ?'
+            + ' and rowid not in (select build_id from %s)'
+            ' order by finished_time' % incremental_table,
+            (f'{path}%', min_started),
+        ).fetchall()
         return self._get_builds(results)
 
     def get_builds_from_paths(self, paths, incremental_table=DEFAULT_INCREMENTAL_TABLE):
@@ -168,8 +171,7 @@ class Database:
                     'select data from file where path between ? and ?',
                     (path, path + '\x7F')):
                 try:
-                    data = zlib.decompress(dataz).decode('utf-8', 'replace')
-                    if data:
+                    if data := zlib.decompress(dataz).decode('utf-8', 'replace'):
                         results.append(data)
                 except UnicodeDecodeError:
                     print(f'Failed to decode data for {path}')
@@ -184,15 +186,18 @@ class Database:
                                % incremental_table).fetchone()[0]
 
     def reset_emitted(self, incremental_table=DEFAULT_INCREMENTAL_TABLE):
-        self.db.execute('drop table if exists %s' % incremental_table)
+        self.db.execute(f'drop table if exists {incremental_table}')
 
     def insert_emitted(self, rows_emitted, incremental_table=DEFAULT_INCREMENTAL_TABLE):
         self._init_incremental(incremental_table)
-        gen, = self.db.execute('select max(gen)+1 from %s' % incremental_table).fetchone()
+        (gen,) = self.db.execute(
+            f'select max(gen)+1 from {incremental_table}'
+        ).fetchone()
         if not gen:
             gen = 0
         self.db.executemany(
-            'insert into %s values(?,?)' % incremental_table,
-            ((row, gen) for row in rows_emitted))
+            f'insert into {incremental_table} values(?,?)',
+            ((row, gen) for row in rows_emitted),
+        )
         self.db.commit()
         return gen
